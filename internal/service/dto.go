@@ -4,9 +4,20 @@ import "time"
 
 type CalculationType = int
 
+func DefineCalculationType(t int) CalculationType {
+	switch t {
+	case CalculationTypePercent:
+		return CalculationTypePercent
+	case CalculationTypeFixed:
+		return CalculationTypeFixed
+	default:
+		return 0
+	}
+}
+
 const (
 	CalculationTypePercent CalculationType = iota + 1
-	CalculationTypeSpecificValue
+	CalculationTypeFixed
 )
 
 type RegisterRequest struct {

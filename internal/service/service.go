@@ -10,7 +10,7 @@ type AuthorizationService interface {
 }
 
 type OrderService interface {
-	//can return defined errors ErrInvalidFormat, ErrDuplicate, ErrOrderUploadAnotherUser, ErrWrongNumberOfOrder 
+	//can return defined errors ErrInvalidFormat, ErrDuplicate, ErrOrderUploadAnotherUser, ErrWrongNumberOfOrder
 	//and undefined error
 	Register(context.Context, RegisterOrderRequest) error
 	//can return undefined error
@@ -32,13 +32,13 @@ type AccrualService interface {
 }
 
 type CalculationService interface {
-	//can return defined errors ErrEntityDoesNotExists and undefined error
+	//Add new calculations to queue. Can return defined errors ErrEntityDoesNotExists and undefined error
 	Register(context.Context, RegisterCalculationRequest) error
-	//can return defined errors ErrInvalidFormat, ErrDuplicate and undefined error
+	//Return information about calculation. Can return defined errors ErrInvalidFormat, ErrDuplicate and undefined error
 	Calculation(context.Context, CalculationFilterRequest) (CalculationInfo, error)
 }
 
 type CalculationRuleService interface {
-	//can return defined errors ErrInvalidFormat, ErrDuplicate and undefined error 
+	//can return defined errors ErrInvalidFormat, ErrDuplicate and undefined error
 	Register(context.Context, RegisterCalculationRuleRequest) error
 }
