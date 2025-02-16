@@ -10,7 +10,7 @@ import (
 	"github.com/vilasle/gophermart/internal/service"
 )
 
-/*
+
 type registerRequest struct {
 	login    string `json:"login"`
 	password string `json:"password"`
@@ -37,28 +37,36 @@ func (c Controller) UserRegister(*http.Request) controller.ControllerHandler {
 			return controller.NewResponse([]byte{}, controller.ErrInvalidFormat, controller.TEXT)
 		}
 		// Unmarshal login and password
-		var user registerRequest  // implement my own struct to unmarshall
-		err = json.Unmarshal(body, &user)
+		// proxy struct to unmarshal
+		regReq := struct {
+			Login    string `json:"login"`
+			Password string `json:"password"`
+		}
+
+		err = json.Unmarshal(body, &regReq)
 		if err != nil {
 			return controller.NewResponse([]byte{}, controller.InternalError, controller.TEXT)
 		}
-		// Передаю логин и пароль в сервис на проверку
-		// TODO: как тут преедать третий параметр? Тут требуется конкретная struct, но в service она без struct tag
-		err, userID := c.authSvc.Register(r.Context(),user)   // TODO: ПЕРЕДАЮ login & password в сервис при этом создал свою registerRequest с struct tags
-		if err != nil {
-			// TODO: Как мне тут распознать и вернуть ошибку сервиса: через отдельную функцию типа checkErr в controller?
-			/*200 — пользователь успешно зарегистрирован и аутентифицирован;
-			400 — неверный формат запроса;
-			409 — логин уже занят;
-			500 — внутренняя ошибка сервера.
-			*/
+		// fill the acceptable struct for response
+		user := service.RegisterRequest {
+			Login: regReq.Login,
+			Password: regReq.Password,
+		}
 
-			return controller.NewResponse([]byte{}, controller.InternalError, controller.TEXT)
+		// Передаю логин и пароль в сервис на проверку
+		err, userID := c.authSvc.Register(r.Context(),user)   //
+
+
+
+		if err != nil {
+			return controller.NewResponse([]byte{}, err, controller.TEXT)
+
 		}
 		// TODO: Где расположить эту функцию генерации токена genJWTTokenString (кинул в jwt)? Она по идее стоит особняком от jwt middleware, т.к.
+		// TODO: располагаем в controller и дёргаем в eregister и login
 		// jwt middleware не распространяет своё действие на register и login?
 		token, err :=
-		return c.authSvc.Register(r.Context(), user) // TODO: implementaion of AuthorizationService in service?
+		return c.authSvc.Register(r.Context(), user) //
 	}
 }
 
