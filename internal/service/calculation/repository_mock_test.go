@@ -54,25 +54,6 @@ func (mr *MockCalculationRepositoryMockRecorder) AddCalculationToQueue(arg0 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddCalculationToQueue", reflect.TypeOf((*MockCalculationRepository)(nil).AddCalculationToQueue), varargs...)
 }
 
-// AddRules mocks base method.
-func (m *MockCalculationRepository) AddRules(arg0 context.Context, arg1 ...repository.AddingRule) error {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0}
-	for _, a := range arg1 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "AddRules", varargs...)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddRules indicates an expected call of AddRules.
-func (mr *MockCalculationRepositoryMockRecorder) AddRules(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0}, arg1...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRules", reflect.TypeOf((*MockCalculationRepository)(nil).AddRules), varargs...)
-}
-
 // Calculations mocks base method.
 func (m *MockCalculationRepository) Calculations(arg0 context.Context, arg1 repository.CalculationFilter) ([]repository.CalculationInfo, error) {
 	m.ctrl.T.Helper()
@@ -88,21 +69,6 @@ func (mr *MockCalculationRepositoryMockRecorder) Calculations(arg0, arg1 interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Calculations", reflect.TypeOf((*MockCalculationRepository)(nil).Calculations), arg0, arg1)
 }
 
-// Rules mocks base method.
-func (m *MockCalculationRepository) Rules(arg0 context.Context, arg1 repository.RuleFilter) ([]repository.RuleInfo, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Rules", arg0, arg1)
-	ret0, _ := ret[0].([]repository.RuleInfo)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Rules indicates an expected call of Rules.
-func (mr *MockCalculationRepositoryMockRecorder) Rules(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rules", reflect.TypeOf((*MockCalculationRepository)(nil).Rules), arg0, arg1)
-}
-
 // SaveCalculationResult mocks base method.
 func (m *MockCalculationRepository) SaveCalculationResult(arg0 context.Context, arg1 repository.AddCalculationResult) error {
 	m.ctrl.T.Helper()
@@ -115,4 +81,62 @@ func (m *MockCalculationRepository) SaveCalculationResult(arg0 context.Context, 
 func (mr *MockCalculationRepositoryMockRecorder) SaveCalculationResult(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveCalculationResult", reflect.TypeOf((*MockCalculationRepository)(nil).SaveCalculationResult), arg0, arg1)
+}
+
+// MockCalculationRules is a mock of CalculationRules interface.
+type MockCalculationRules struct {
+	ctrl     *gomock.Controller
+	recorder *MockCalculationRulesMockRecorder
+}
+
+// MockCalculationRulesMockRecorder is the mock recorder for MockCalculationRules.
+type MockCalculationRulesMockRecorder struct {
+	mock *MockCalculationRules
+}
+
+// NewMockCalculationRules creates a new mock instance.
+func NewMockCalculationRules(ctrl *gomock.Controller) *MockCalculationRules {
+	mock := &MockCalculationRules{ctrl: ctrl}
+	mock.recorder = &MockCalculationRulesMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCalculationRules) EXPECT() *MockCalculationRulesMockRecorder {
+	return m.recorder
+}
+
+// AddRules mocks base method.
+func (m *MockCalculationRules) AddRules(arg0 context.Context, arg1 ...repository.AddingRule) (string, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0}
+	for _, a := range arg1 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "AddRules", varargs...)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddRules indicates an expected call of AddRules.
+func (mr *MockCalculationRulesMockRecorder) AddRules(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0}, arg1...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRules", reflect.TypeOf((*MockCalculationRules)(nil).AddRules), varargs...)
+}
+
+// Rules mocks base method.
+func (m *MockCalculationRules) Rules(arg0 context.Context, arg1 repository.RuleFilter) ([]repository.RuleInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Rules", arg0, arg1)
+	ret0, _ := ret[0].([]repository.RuleInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Rules indicates an expected call of Rules.
+func (mr *MockCalculationRulesMockRecorder) Rules(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rules", reflect.TypeOf((*MockCalculationRules)(nil).Rules), arg0, arg1)
 }
