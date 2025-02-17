@@ -11,17 +11,26 @@ import (
 )
 
 type CalculationService struct {
-	rep     repository.CalculationRepository
-	mxRules *sync.Mutex
-	rules   map[int16]rule
-	manager *EventManager
+	repCalc  repository.CalculationRepository
+	repRules repository.CalculationRules
+	mxRules  *sync.Mutex
+	rules    map[int16]rule
+	manager  *EventManager
 }
 
-func NewCalculationService(rep repository.CalculationRepository, manager *EventManager) *CalculationService {
+type CalculationServiceConfig struct {
+	repository.CalculationRepository
+	repository.CalculationRules
+	*EventManager
+}
+
+func NewCalculationService(config CalculationServiceConfig) *CalculationService {
 	s := &CalculationService{
-		rep:     rep,
-		manager: manager,
-		rules:   make(map[int16]rule),
+		repCalc:  config.CalculationRepository,
+		repRules: config.CalculationRules,
+		manager:  config.EventManager,
+
+		rules: make(map[int16]rule),
 	}
 
 	s.manager.RegisterHandler(NewOrder, s.calculateOrder)
@@ -35,7 +44,7 @@ func (c CalculationService) Register(ctx context.Context, dto service.RegisterCa
 	//save on db; line on table need for unexpected finishing service
 	addingDto := c.prepareAddingDto(dto)
 
-	if err := c.rep.AddCalculationToQueue(ctx, addingDto...); err != nil {
+	if err := c.repCalc.AddCalculationToQueue(ctx, addingDto...); err != nil {
 		return err
 	}
 
@@ -60,7 +69,7 @@ func (c CalculationService) prepareAddingDto(dto service.RegisterCalculationRequ
 }
 
 func (c CalculationService) Calculation(ctx context.Context, dto service.CalculationFilterRequest) (service.CalculationInfo, error) {
-	result, err := c.rep.Calculations(ctx, repository.CalculationFilter{
+	result, err := c.repCalc.Calculations(ctx, repository.CalculationFilter{
 		OrderNumber: dto.OrderNumber,
 	})
 
@@ -107,7 +116,7 @@ func (c CalculationService) calculateOrder(ctx context.Context, event Event) {
 
 	resultDto := c.fillCalculatedDto(number, bonus)
 
-	if err := c.rep.SaveCalculationResult(ctx, resultDto); err != nil {
+	if err := c.repCalc.SaveCalculationResult(ctx, resultDto); err != nil {
 		//TODO add log message
 		return
 	}
@@ -140,7 +149,7 @@ func (c CalculationService) fillCalculatedDto(orderNumber string, value float64)
 }
 
 func (c CalculationService) readAllRules() error {
-	rs, err := c.rep.Rules(context.Background(), repository.RuleFilter{})
+	rs, err := c.repRules.Rules(context.Background(), repository.RuleFilter{})
 	if err != nil {
 		//TODO wrap error
 		return err
@@ -155,7 +164,7 @@ func (c CalculationService) readRule(ctx context.Context, event Event) {
 	if !ok {
 		return
 	}
-	rs, err := c.rep.Rules(ctx, repository.RuleFilter{ID: id})
+	rs, err := c.repRules.Rules(ctx, repository.RuleFilter{ID: id})
 	if err != nil {
 		//TODO add log message
 		return

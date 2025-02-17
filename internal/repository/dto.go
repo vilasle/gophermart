@@ -23,7 +23,9 @@ type CalculationInfo struct {
 }
 
 type AddingRule struct {
-
+	Match string
+	Point float64
+	CalculationType int
 }
 
 type RuleFilter struct {
