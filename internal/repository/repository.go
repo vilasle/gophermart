@@ -2,6 +2,7 @@ package repository
 
 import "context"
 
+//go:generate mockgen -package=calculation -destination=../service/calculation/repository_mock_test.go -source=repository.go
 type CalculationRepository interface {
 	AddCalculationToQueue(context.Context, ...AddingCalculation) (error)
 	

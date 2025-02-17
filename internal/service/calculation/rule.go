@@ -7,7 +7,7 @@ import (
 )
 
 type rule struct {
-	exp *regexp.Regexp
+	exp             *regexp.Regexp
 	calculationType service.CalculationType
 	value           float64
 }
