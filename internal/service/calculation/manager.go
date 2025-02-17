@@ -2,6 +2,7 @@ package calculation
 
 import (
 	"context"
+	"sync/atomic"
 )
 
 type EventType = int
@@ -19,21 +20,33 @@ type Event struct {
 }
 
 type EventManager struct {
+	state    atomic.Bool
 	events   chan Event
 	handlers map[EventType][]EventHandler
 }
 
 func NewEventManager(ctx context.Context) *EventManager {
+	eventCap := 64
 	m := &EventManager{
-		events:   make(chan Event),
+		events:   make(chan Event, eventCap),
 		handlers: make(map[EventType][]EventHandler),
+		state:    atomic.Bool{},
 	}
 	go m.start(ctx)
 	return m
 }
 
 func (em *EventManager) RaiseEvent(name EventType, data any) {
+	//manager is finished
+	if em.Stopped() {
+		return
+	}
 	em.events <- Event{name, data}
+}
+
+func (em *EventManager) Stopped() bool {
+	v := em.state.Load()
+	return v
 }
 
 func (em *EventManager) RegisterHandler(event EventType, handler EventHandler) {
@@ -54,6 +67,12 @@ func (em *EventManager) start(ctx context.Context) {
 			worked = false
 		}
 	}
+	em.Stop()
+}
+
+func (em *EventManager) Stop() {
+	em.state.Store(true)
+	close(em.events)
 }
 
 func (em *EventManager) runHandler(ctx context.Context, event Event, limit chan struct{}) {
