@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vilasle/gophermart/internal/logger"
-	"github.com/vilasle/gophermart/internal/repository"
+	"github.com/vilasle/gophermart/internal/repository/calculation"
 	"github.com/vilasle/gophermart/internal/service"
 )
 

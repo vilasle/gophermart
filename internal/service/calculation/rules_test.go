@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	gomock "github.com/golang/mock/gomock"
-	"github.com/vilasle/gophermart/internal/repository"
+	"github.com/vilasle/gophermart/internal/repository/calculation"
 	"github.com/vilasle/gophermart/internal/service"
 )
 

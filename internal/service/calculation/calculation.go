@@ -9,7 +9,7 @@ import (
 	wrap "github.com/pkg/errors"
 
 	"github.com/vilasle/gophermart/internal/logger"
-	"github.com/vilasle/gophermart/internal/repository"
+	"github.com/vilasle/gophermart/internal/repository/calculation"
 	"github.com/vilasle/gophermart/internal/service"
 )
 

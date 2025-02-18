@@ -9,7 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	repository "github.com/vilasle/gophermart/internal/repository"
+	repository "github.com/vilasle/gophermart/internal/repository/calculation"
 )
 
 // MockCalculationRepository is a mock of CalculationRepository interface.
