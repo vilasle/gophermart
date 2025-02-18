@@ -1,0 +1,47 @@
+package postgres
+
+import "errors"
+
+func (r CalculationRepository) createSchemeIfNotExists() error {
+	errs := make([]error, 0, 3)
+	errs = append(errs, r.createRuleScheme())
+	errs = append(errs, r.createCalculationQueueScheme())
+	errs = append(errs, r.createCalculationScheme())
+
+	return errors.Join(errs...)
+}
+
+func (r CalculationRepository) createRuleScheme() error {
+	txt := `
+	CREATE TABLE IF NOT EXISTS rules (
+		id IDENTITY PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+		match VARCHAR(255) NOT NULL,
+		point REAL NOT NULL,
+		way SMALLINT NOT NULL
+	);`
+	return r.ExecReturnOnlyError(txt)
+}
+
+func (r CalculationRepository) createCalculationQueueScheme() error {
+	txt := `
+	CREATE TABLE IF NOT EXISTS calculation_queue (
+		order_number VARCHAR(255) NOT NULL,
+		product_name VARCHAR(255) NOT NULL,
+		price REAL NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS calculation_queue_order_number_idx ON calculation_queue (order_number);
+	`
+	return r.ExecReturnOnlyError(txt)
+}
+
+func (r CalculationRepository) createCalculationScheme() error {
+	txt := `
+	CREATE TABLE IF NOT EXISTS calculation (
+		order_number VARCHAR(255) UNIQUE NOT NULL,
+		points REAL NOT NULL
+		status SMALLINT NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS calculation_order_number_idx ON calculation (order_number);
+	`
+	return r.ExecReturnOnlyError(txt)
+}

@@ -9,7 +9,7 @@ import (
 	wrap "github.com/pkg/errors"
 
 	"github.com/vilasle/gophermart/internal/logger"
-	"github.com/vilasle/gophermart/internal/repository/calculation"
+	repository "github.com/vilasle/gophermart/internal/repository/calculation"
 	"github.com/vilasle/gophermart/internal/service"
 )
 
@@ -113,6 +113,7 @@ func (c CalculationService) statusView(status repository.CalculationStatus) stri
 	}
 }
 
+// TODO may I need to change calculation with help regexp and check matching on sql?
 // event.Type = NewOrder; event.Data = service.RegisterCalculationRequest
 func (c CalculationService) calculateOrder(ctx context.Context, event Event) {
 	dto, ok := event.Data.(service.RegisterCalculationRequest)
