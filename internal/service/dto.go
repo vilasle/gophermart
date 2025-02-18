@@ -4,15 +4,16 @@ import "time"
 
 type CalculationType = int
 
-func DefineCalculationType(t int) CalculationType {
+func DefineCalculationType(t int) (value CalculationType, correct bool) {
 	switch t {
 	case CalculationTypePercent:
-		return CalculationTypePercent
+		value, correct = CalculationTypePercent, true
 	case CalculationTypeFixed:
-		return CalculationTypeFixed
+		value, correct = CalculationTypeFixed, true
 	default:
-		return 0
+		value, correct = 0, false
 	}
+	return
 }
 
 const (

@@ -1,15 +1,33 @@
 package repository
 
+type CalculationStatus = int
+
+const (
+	Registered = iota + 1
+	Invalid
+	Processing
+	Processed
+)
+
+func IsCorrectStatus(s CalculationStatus) bool {
+	switch s {
+	case Registered, Invalid, Processing, Processed:
+		return true
+	default:
+		return false
+	}
+}
+
 type AddingCalculation struct {
 	OrderNumber string
 	ProductName string
-	Price float64
+	Price       float64
 }
 
 type AddCalculationResult struct {
 	OrderNumber string
-	Status string
-	Value float64
+	Status      int
+	Value       float64
 }
 
 type CalculationFilter struct {
@@ -18,13 +36,13 @@ type CalculationFilter struct {
 
 type CalculationInfo struct {
 	OrderNumber string
-	Status string
-	Value float64
+	Status      CalculationStatus
+	Value       float64
 }
 
 type AddingRule struct {
-	Match string
-	Point float64
+	Match           string
+	Point           float64
 	CalculationType int
 }
 
@@ -33,8 +51,8 @@ type RuleFilter struct {
 }
 
 type RuleInfo struct {
-	ID int16
-	Match string
-	Point float64
+	ID              int16
+	Match           string
+	Point           float64
 	CalculationType int
 }

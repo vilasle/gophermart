@@ -6,6 +6,9 @@ import (
 	"regexp"
 	"sync"
 
+	wrap "github.com/pkg/errors"
+
+	"github.com/vilasle/gophermart/internal/logger"
 	"github.com/vilasle/gophermart/internal/repository"
 	"github.com/vilasle/gophermart/internal/service"
 )
@@ -29,14 +32,15 @@ func NewCalculationService(config CalculationServiceConfig) *CalculationService 
 		repCalc:  config.CalculationRepository,
 		repRules: config.CalculationRules,
 		manager:  config.EventManager,
-
-		rules: make(map[int16]rule),
+		mxRules:  &sync.Mutex{},
+		rules:    make(map[int16]rule),
 	}
 
 	s.manager.RegisterHandler(NewOrder, s.calculateOrder)
 	s.manager.RegisterHandler(NewRule, s.readRule)
 
 	s.readAllRules()
+	//TODO if in repository there are rows in queue need to raise events
 	return s
 }
 
@@ -68,36 +72,52 @@ func (c CalculationService) prepareAddingDto(dto service.RegisterCalculationRequ
 	return addingDto
 }
 
-func (c CalculationService) Calculation(ctx context.Context, dto service.CalculationFilterRequest) (service.CalculationInfo, error) {
+func (c CalculationService) Calculation(ctx context.Context, dto service.CalculationFilterRequest) ([]service.CalculationInfo, error) {
 	result, err := c.repCalc.Calculations(ctx, repository.CalculationFilter{
 		OrderNumber: dto.OrderNumber,
 	})
 
 	if err != nil {
-		return service.CalculationInfo{}, err
+		return []service.CalculationInfo{}, err
 	}
 
 	if len(result) == 0 {
-		//TODO define right error
-		return service.CalculationInfo{}, errors.New("not found")
+		return []service.CalculationInfo{}, service.ErrEntityDoesNotExists
 	}
 
-	calc := result[0]
-
-	return service.CalculationInfo{
-		OrderNumber: calc.OrderNumber,
-		//TODO wrap status
-		Status:  calc.Status,
-		Accrual: calc.Value,
-	}, nil
-
+	info := make([]service.CalculationInfo, 0, len(result))
+	for _, v := range result {
+		info = append(info, c.fillCalculatedInfo(v))
+	}
+	return info, nil
 }
 
-// event.Type = NewOrder
-// event.Data = service.RegisterCalculationRequest
+func (c CalculationService) fillCalculatedInfo(dto repository.CalculationInfo) service.CalculationInfo {
+	return service.CalculationInfo{
+		OrderNumber: dto.OrderNumber,
+		Status:      c.statusView(dto.Status),
+		Accrual:     dto.Value,
+	}
+}
+
+func (c CalculationService) statusView(status repository.CalculationStatus) string {
+	switch status {
+	case repository.Invalid:
+		return "INVALID"
+	case repository.Processing:
+		return "PROCESSING"
+	case repository.Processed:
+		return "PROCESSED"
+	default:
+		return ""
+	}
+}
+
+// event.Type = NewOrder; event.Data = service.RegisterCalculationRequest
 func (c CalculationService) calculateOrder(ctx context.Context, event Event) {
 	dto, ok := event.Data.(service.RegisterCalculationRequest)
 	if !ok {
+		logger.Warn("was raise event with wrong data", "event", event.Type, "data", event.Data)
 		return
 	}
 
@@ -117,7 +137,7 @@ func (c CalculationService) calculateOrder(ctx context.Context, event Event) {
 	resultDto := c.fillCalculatedDto(number, bonus)
 
 	if err := c.repCalc.SaveCalculationResult(ctx, resultDto); err != nil {
-		//TODO add log message
+		logger.Error("saving calculation result", "error", err, "data", dto)
 		return
 	}
 }
@@ -135,10 +155,9 @@ func (c CalculationService) calculateProduct(product service.ProductRow) float64
 }
 
 func (c CalculationService) fillCalculatedDto(orderNumber string, value float64) repository.AddCalculationResult {
-	//TODO change a choice of status
-	status := "INVALID"
+	status := repository.Invalid
 	if value > 0 {
-		status = "PROCESSED"
+		status = repository.Processed
 	}
 
 	return repository.AddCalculationResult{
@@ -151,27 +170,27 @@ func (c CalculationService) fillCalculatedDto(orderNumber string, value float64)
 func (c CalculationService) readAllRules() error {
 	rs, err := c.repRules.Rules(context.Background(), repository.RuleFilter{})
 	if err != nil {
-		//TODO wrap error
+
 		return err
 	}
 	return c.fillRules(rs)
 }
 
-// event.Type = NewRule
-// event.Data = id rule on repository
+// event.Type = NewRule; event.Data = id rule on repository
 func (c CalculationService) readRule(ctx context.Context, event Event) {
 	id, ok := event.Data.(int16)
 	if !ok {
+		logger.Warn("was raise event with wrong data", "event", event.Type, "data", event.Data)
 		return
 	}
 	rs, err := c.repRules.Rules(ctx, repository.RuleFilter{ID: id})
 	if err != nil {
-		//TODO add log message
+		logger.Error("getting specific rule", "id", id, "error", err)
 		return
 	}
 
 	if err := c.fillRules(rs); err != nil {
-		//TODO add log message
+		logger.Error("preparing rules for using", "error", err)
 		return
 	}
 }
@@ -185,14 +204,12 @@ func (c *CalculationService) fillRules(rs []repository.RuleInfo) error {
 	for _, r := range rs {
 		exp, err := regexp.Compile(r.Match)
 		if err != nil {
-			//TODO add more context
-			errs = append(errs, err)
+			errs = append(errs, wrap.Wrapf(err, "invalid regexp %s", r.Match))
 			continue
 		}
 
-		calcType := service.CalculationType(r.CalculationType)
-		if calcType == 0 {
-			//TODO add more context
+		calcType, correct := service.DefineCalculationType(r.CalculationType)
+		if !correct {
 			errs = append(errs, errors.New("invalid calculation type"))
 			continue
 		}
