@@ -11,7 +11,7 @@ import (
 )
 
 func TestRuleService_Register(t *testing.T) {
-	type behavior func(rep *MockCalculationRules, ctx context.Context, dto service.RegisterCalculationRuleRequest, id string) error
+	type behavior func(rep *MockCalculationRules, ctx context.Context, dto service.RegisterCalculationRuleRequest, id int16) error
 
 	type args struct {
 		ctx context.Context
@@ -32,7 +32,7 @@ func TestRuleService_Register(t *testing.T) {
 					Point: 5,
 					Type:  service.CalculationTypePercent,
 				},
-				behavior: func(rep *MockCalculationRules, ctx context.Context, dto service.RegisterCalculationRuleRequest, id string) error {
+				behavior: func(rep *MockCalculationRules, ctx context.Context, dto service.RegisterCalculationRuleRequest, id int16) error {
 					repDto := repository.AddingRule{Match: dto.Match, Point: dto.Point, CalculationType: dto.Type}
 
 					rep.EXPECT().AddRules(ctx, repDto).Return(id, nil)
@@ -50,7 +50,7 @@ func TestRuleService_Register(t *testing.T) {
 
 			rep := NewMockCalculationRules(ctrl)
 
-			tt.args.behavior(rep, tt.args.ctx, tt.args.dto, "1")
+			tt.args.behavior(rep, tt.args.ctx, tt.args.dto, 1)
 
 			em := NewEventManager(tt.args.ctx)
 

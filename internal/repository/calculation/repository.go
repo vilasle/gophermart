@@ -12,7 +12,7 @@ type CalculationRepository interface {
 }
 
 type CalculationRules interface {
-	AddRules(context.Context, ...AddingRule) (id string, err error)
+	AddRules(context.Context, ...AddingRule) (id int16, err error)
 
 	Rules(context.Context, RuleFilter) ([]RuleInfo, error)
 }

@@ -14,12 +14,12 @@ func (r CalculationRepository) createSchemeIfNotExists() error {
 func (r CalculationRepository) createRuleScheme() error {
 	txt := `
 	CREATE TABLE IF NOT EXISTS rules (
-		id IDENTITY PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-		match VARCHAR(255) NOT NULL,
+		id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+		match VARCHAR(255) UNIQUE NOT NULL,
 		point REAL NOT NULL,
 		way SMALLINT NOT NULL
 	);`
-	return r.ExecReturnOnlyError(txt)
+	return r.conn.ExecReturnOnlyError(txt)
 }
 
 func (r CalculationRepository) createCalculationQueueScheme() error {
@@ -31,17 +31,17 @@ func (r CalculationRepository) createCalculationQueueScheme() error {
 	);
 	CREATE INDEX IF NOT EXISTS calculation_queue_order_number_idx ON calculation_queue (order_number);
 	`
-	return r.ExecReturnOnlyError(txt)
+	return r.conn.ExecReturnOnlyError(txt)
 }
 
 func (r CalculationRepository) createCalculationScheme() error {
 	txt := `
 	CREATE TABLE IF NOT EXISTS calculation (
 		order_number VARCHAR(255) UNIQUE NOT NULL,
-		points REAL NOT NULL
+		points REAL NOT NULL,
 		status SMALLINT NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS calculation_order_number_idx ON calculation (order_number);
 	`
-	return r.ExecReturnOnlyError(txt)
+	return r.conn.ExecReturnOnlyError(txt)
 }

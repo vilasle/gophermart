@@ -9,17 +9,17 @@ import (
 )
 
 type CalculationRepository struct {
-	*connection
+	conn *connection
 }
 
-func NewPostgresCalculationRepository(url url.URL) (CalculationRepository, error) {
+func NewPostgresCalculationRepository(url *url.URL) (CalculationRepository, error) {
 	conn, err := newConnection(url.String())
 	if err != nil {
 		//TODO could not create connection
 		return CalculationRepository{}, err
 	}
 
-	r := CalculationRepository{connection: conn}
+	r := CalculationRepository{conn: conn}
 
 	err = r.createSchemeIfNotExists()
 	if err != nil {
@@ -35,7 +35,7 @@ func (r CalculationRepository) AddCalculationToQueue(ctx context.Context, dto ..
 		sb.Values(v.OrderNumber, v.ProductName, v.Price)
 	}
 	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
-	_, err := r.Exec(ctx, txt, args...)
+	_, err := r.conn.Exec(ctx, txt, args...)
 	//TODO check and wrap error
 	return err
 }
@@ -46,7 +46,7 @@ func (r CalculationRepository) SaveCalculationResult(ctx context.Context, dto de
 		Values(dto.OrderNumber, dto.Value, dto.Status).
 		BuildWithFlavor(sqlbuilder.PostgreSQL)
 
-	_, err := r.Exec(ctx, txt, args...)
+	_, err := r.conn.Exec(ctx, txt, args...)
 	//TODO check and wrap error
 	return err
 }
@@ -62,7 +62,7 @@ func (r CalculationRepository) Calculations(ctx context.Context, dto decl.Calcul
 
 	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
 
-	rows, err := r.Query(ctx, txt, args...)
+	rows, err := r.conn.Query(ctx, txt, args...)
 	if err != nil {
 		//TODO check and wrap error
 		return nil, err
@@ -82,13 +82,15 @@ func (r CalculationRepository) Calculations(ctx context.Context, dto decl.Calcul
 
 }
 
-func (r CalculationRepository) AddRules(ctx context.Context, dto ...decl.AddingRule) (id string, err error) {
-	sp := sqlbuilder.InsertInto("rules").Cols("match", "point", "way")
+func (r CalculationRepository) AddRules(ctx context.Context, dto ...decl.AddingRule) (id int16, err error) {
+	sp := sqlbuilder.InsertInto("rules").Cols("match", "point", "way").Returning("id")
 	for _, v := range dto {
 		sp.Values(v.Match, v.Point, v.CalculationType)
 	}
 	txt, args := sp.BuildWithFlavor(sqlbuilder.PostgreSQL)
-	_, err = r.Exec(ctx, txt, args...)
+	row := r.conn.QueryRow(ctx, txt, args...)
+
+	err = row.Scan(&id)
 	//TODO check and wrap error
 	return id, err
 }
@@ -101,7 +103,7 @@ func (r CalculationRepository) Rules(ctx context.Context, dto decl.RuleFilter) (
 	}
 
 	txt, args := sp.BuildWithFlavor(sqlbuilder.PostgreSQL)
-	rows, err := r.Query(ctx, txt, args...)
+	rows, err := r.conn.Query(ctx, txt, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +114,7 @@ func (r CalculationRepository) Rules(ctx context.Context, dto decl.RuleFilter) (
 		if err != nil {
 			return nil, err
 		}
+		rules = append(rules, rule)
 	}
 	return rules, nil
 }
