@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"errors"
 
 	"github.com/vilasle/gophermart/internal/repository/gophermart"
 	"github.com/vilasle/gophermart/internal/service"
@@ -29,7 +30,9 @@ func (svc AuthorizationService) Register(ctx context.Context, dto service.Regist
 
 	result, err := svc.rep.AddUser(ctx, user)
 	if err != nil {
-		//TODO check repository error and wrap it
+		if errors.Is(err, gophermart.ErrDuplicate) {
+			return service.UserInfo{}, service.ErrDuplicate
+		}
 		return service.UserInfo{}, err
 	}
 	return service.UserInfo{
@@ -37,7 +40,6 @@ func (svc AuthorizationService) Register(ctx context.Context, dto service.Regist
 	}, nil
 }
 
-// can return defined errors ErrInvalidFormat, ErrWrongNameOrPassword and undefined error
 func (svc AuthorizationService) Authorize(ctx context.Context, dto service.AuthorizeRequest) (service.UserInfo, error) {
 	if dto.Login == "" || dto.Password == "" {
 		return service.UserInfo{}, service.ErrInvalidFormat
@@ -50,7 +52,9 @@ func (svc AuthorizationService) Authorize(ctx context.Context, dto service.Autho
 
 	result, err := svc.rep.CheckUser(ctx, user)
 	if err != nil {
-		//TODO check repository error and wrap it
+		if errors.Is(err, gophermart.ErrEmptyResult) {
+			return service.UserInfo{}, service.ErrWrongNameOrPassword
+		}
 		return service.UserInfo{}, err
 	}
 
