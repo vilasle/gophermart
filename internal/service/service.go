@@ -27,7 +27,7 @@ type WithdrawalService interface {
 }
 
 type AccrualService interface {
-	//can return defined errors ErrEntityDoesNotExists, ErrLimit and undefined error
+	//can return defined errors ErrEntityDoesNotExists, ErrLimit, ErrInvalidFormat, ErrUnexpected and undefined error
 	Accruals(context.Context, AccrualsFilterRequest) (AccrualsInfo, error)
 }
 
