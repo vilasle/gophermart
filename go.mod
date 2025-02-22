@@ -5,7 +5,6 @@ go 1.22
 toolchain go1.23.6
 
 require (
-	github.com/go-chi/chi/v5 v5.2.1
 	github.com/golang/mock v1.6.0
 	github.com/huandu/go-sqlbuilder v1.34.0
 	github.com/jackc/pgx/v5 v5.7.2

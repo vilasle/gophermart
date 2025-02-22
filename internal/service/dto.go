@@ -72,7 +72,7 @@ type WithdrawalListRequest struct {
 type WithdrawalInfo struct {
 	OrderNumber string
 	Sum         float64
-	Status      string
+	CreatedAt   time.Time
 }
 
 type AccrualsFilterRequest struct {
