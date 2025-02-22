@@ -11,6 +11,10 @@ type WithdrawalService struct {
 	rep gophermart.WithdrawalRepository
 }
 
+func NewWithdrawalService(rep gophermart.WithdrawalRepository) *WithdrawalService {
+	return &WithdrawalService{rep: rep}
+}
+
 func (s WithdrawalService) Withdraw(ctx context.Context, dto service.WithdrawalRequest) error {
 	return s.rep.Expense(ctx, gophermart.WithdrawalRequest{
 		UserID:      dto.UserID,
@@ -20,7 +24,7 @@ func (s WithdrawalService) Withdraw(ctx context.Context, dto service.WithdrawalR
 }
 
 func (s WithdrawalService) List(ctx context.Context, dto service.WithdrawalListRequest) ([]service.WithdrawalInfo, error) {
-	r, err := s.rep.History(ctx, gophermart.HistoryRequest{UserID: dto.UserID})
+	r, err := s.rep.Transactions(ctx, gophermart.TransactionRequest{UserID: dto.UserID})
 	if err != nil {
 		return []service.WithdrawalInfo{}, err
 	}
@@ -40,7 +44,7 @@ func (s WithdrawalService) List(ctx context.Context, dto service.WithdrawalListR
 }
 
 func (s WithdrawalService) Balance(ctx context.Context, dto service.UserBalanceRequest) (service.UserBalance, error) {
-	r, err := s.rep.History(ctx, gophermart.HistoryRequest{UserID: dto.UserID})
+	r, err := s.rep.Transactions(ctx, gophermart.TransactionRequest{UserID: dto.UserID})
 	if err != nil {
 		return service.UserBalance{}, err
 	}

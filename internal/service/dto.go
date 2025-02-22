@@ -36,6 +36,7 @@ type UserInfo struct {
 }
 
 type RegisterOrderRequest struct {
+	UserID string
 	Number string
 }
 

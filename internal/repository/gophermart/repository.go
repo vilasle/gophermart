@@ -9,5 +9,11 @@ type AuthorizationRepository interface {
 
 type WithdrawalRepository interface {
 	Expense(context.Context, WithdrawalRequest) error
-	History(context.Context, HistoryRequest) ([]HistoryLine, error)
+	Transactions(context.Context, TransactionRequest) ([]Transaction, error)
 } 
+
+type OrderRepository interface {
+	Create(context.Context, OrderCreateRequest) error
+	Update(context.Context, OrderUpdateRequest) error
+	List(context.Context, OrderListRequest) ([]OrderInfo, error)
+}

@@ -19,14 +19,37 @@ type WithdrawalRequest struct {
 	Sum         float64
 }
 
-type HistoryRequest struct {
+type TransactionRequest struct {
 	UserID string
 }
 
-type HistoryLine struct {
+type Transaction struct {
 	Income      bool
 	UserId      string
 	OrderNumber string
 	Sum         float64
 	CreatedAt   time.Time
+}
+
+type OrderCreateRequest struct {
+	UserID string
+	Number string
+}
+
+type OrderUpdateRequest struct {
+	UserID string
+	Number string
+	Status string
+}
+
+type OrderListRequest struct {
+	UserID string
+	OrderNumber string
+}
+
+type OrderInfo struct {
+	Number	string
+	Status	string
+	Accrual   float64
+	CreatedAt time.Time
 }
