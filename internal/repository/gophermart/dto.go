@@ -53,3 +53,13 @@ type OrderInfo struct {
 	Accrual   float64
 	CreatedAt time.Time
 }
+
+type AccrualRequest struct {
+	OrderNumber string
+}
+
+type AccrualInfo struct {
+	Number string
+	Status string
+	Accrual float64
+}

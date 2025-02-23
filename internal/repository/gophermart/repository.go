@@ -25,3 +25,7 @@ type OrderRepository interface {
 	Update(context.Context, OrderUpdateRequest) error
 	List(context.Context, OrderListRequest) ([]OrderInfo, error)
 }
+
+type AccrualRepository interface {
+	AccrualByOrder(context.Context, AccrualRequest) (AccrualInfo, error)
+}
