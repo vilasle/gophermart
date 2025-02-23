@@ -18,19 +18,22 @@ const (
 )
 
 type checkJob struct {
+	userID string
 	number string
 }
 
 type OrderService struct {
 	rep                  gophermart.OrderRepository
+	repTx                gophermart.WithdrawalRepository
 	accrual              service.AccrualService
 	jobs                 chan checkJob
 	checkerPeriodOnError []time.Duration
 }
 
-func NewOrderService(rep gophermart.OrderRepository, accrual service.AccrualService) OrderService {
+func NewOrderService(rep gophermart.OrderRepository, accrual service.AccrualService, repTx gophermart.WithdrawalRepository) OrderService {
 	s := OrderService{
 		rep:                  rep,
+		repTx:                repTx,
 		accrual:              accrual,
 		jobs:                 make(chan checkJob),
 		checkerPeriodOnError: []time.Duration{10 * time.Second, 1 * time.Minute, 5 * time.Minute},
@@ -43,29 +46,58 @@ func NewOrderService(rep gophermart.OrderRepository, accrual service.AccrualServ
 
 func (s OrderService) runCheckerDirector() {
 	for job := range s.jobs {
-		go s.runChecker(job.number)
+		go s.runChecker(job)
 	}
 }
 
-func (s OrderService) runChecker(number string) {
-	result, err := s.getAccrualInformationByOrder(number)
+func (s OrderService) runChecker(job checkJob) {
+	result, err := s.getAccrualInformationByOrder(job.number)
 	if err != nil {
 		logger.Error("getting information from accrual service was failed", "error", err)
 
 		logger.Debug("may by accrual service is not available, restart task")
-		s.jobs <- checkJob{number: number}
+		s.jobs <- job
 
+		return
+	}
+
+	status := gophermart.StatusNew
+	switch result.Status {
+	case StatusProcessing:
+		status = gophermart.StatusProcessing
+	case StatusInvalid:
+		status = gophermart.StatusInvalid
+	case StatusProcessed:
+		status = gophermart.StatusProcessed
+	}
+
+	upDtp := gophermart.OrderUpdateRequest{
+		Number: job.number,
+		Status: status,
+	}
+
+	ctx := context.Background()
+	if err := s.rep.Update(ctx, upDtp); err != nil {
+		logger.Error("updating order status was failed", "error", err)
+		return
+	}
+
+	if result.Status == StatusProcessed {
+		inDto := gophermart.WithdrawalRequest{
+			UserID:      job.userID,
+			OrderNumber: job.number,
+			Sum:         result.Accrual,
+		}
+		if err := s.repTx.Income(ctx, inDto); err != nil {
+			logger.Error("adding income to user balance was failed", "error", err)
+			return
+		}
 		return
 	}
 
 	if result.Status == StatusProcessing {
 		time.AfterFunc(time.Second*10, func() {
-			s.runChecker(number)
-		})
-	} else {
-		s.rep.Update(context.Background(), gophermart.OrderUpdateRequest{
-			Number: number,
-			Status: result.Status,
+			s.runChecker(job)
 		})
 	}
 }

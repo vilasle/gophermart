@@ -25,7 +25,7 @@ type TransactionRequest struct {
 
 type Transaction struct {
 	Income      bool
-	UserId      string
+	UserID      string
 	OrderNumber string
 	Sum         float64
 	CreatedAt   time.Time
@@ -39,7 +39,7 @@ type OrderCreateRequest struct {
 type OrderUpdateRequest struct {
 	UserID string
 	Number string
-	Status string
+	Status int
 }
 
 type OrderListRequest struct {
