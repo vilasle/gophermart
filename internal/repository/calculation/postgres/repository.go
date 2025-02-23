@@ -2,28 +2,20 @@ package postgres
 
 import (
 	"context"
-	"net/url"
+	"database/sql"
 
 	"github.com/huandu/go-sqlbuilder"
 	decl "github.com/vilasle/gophermart/internal/repository/calculation"
 )
 
 type CalculationRepository struct {
-	conn *connection
+	db *sql.DB
 }
 
-func NewPostgresCalculationRepository(url *url.URL) (CalculationRepository, error) {
-	conn, err := newConnection(url.String())
-	if err != nil {
-		//TODO could not create connection
-		return CalculationRepository{}, err
-	}
+func NewPostgresCalculationRepository(conn *sql.DB) (CalculationRepository, error) {
+	r := CalculationRepository{db: conn}
 
-	r := CalculationRepository{conn: conn}
-
-	err = r.createSchemeIfNotExists()
-	if err != nil {
-		//TODO could not create scheme
+	if err := r.createSchemeIfNotExists(); err != nil {
 		return CalculationRepository{}, err
 	}
 	return r, nil
@@ -35,7 +27,7 @@ func (r CalculationRepository) AddCalculationToQueue(ctx context.Context, dto ..
 		sb.Values(v.OrderNumber, v.ProductName, v.Price)
 	}
 	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
-	_, err := r.conn.Exec(ctx, txt, args...)
+	_, err := r.db.ExecContext(ctx, txt, args...)
 	//TODO check and wrap error
 	return err
 }
@@ -46,7 +38,7 @@ func (r CalculationRepository) SaveCalculationResult(ctx context.Context, dto de
 		Values(dto.OrderNumber, dto.Value, dto.Status).
 		BuildWithFlavor(sqlbuilder.PostgreSQL)
 
-	_, err := r.conn.Exec(ctx, txt, args...)
+	_, err := r.db.ExecContext(ctx, txt, args...)
 	//TODO check and wrap error
 	return err
 }
@@ -62,7 +54,7 @@ func (r CalculationRepository) Calculations(ctx context.Context, dto decl.Calcul
 
 	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
 
-	rows, err := r.conn.Query(ctx, txt, args...)
+	rows, err := r.db.QueryContext(ctx, txt, args...)
 	if err != nil {
 		//TODO check and wrap error
 		return nil, err
@@ -88,7 +80,7 @@ func (r CalculationRepository) AddRules(ctx context.Context, dto ...decl.AddingR
 		sp.Values(v.Match, v.Point, v.CalculationType)
 	}
 	txt, args := sp.BuildWithFlavor(sqlbuilder.PostgreSQL)
-	row := r.conn.QueryRow(ctx, txt, args...)
+	row := r.db.QueryRowContext(ctx, txt, args...)
 
 	err = row.Scan(&id)
 	//TODO check and wrap error
@@ -103,7 +95,7 @@ func (r CalculationRepository) Rules(ctx context.Context, dto decl.RuleFilter) (
 	}
 
 	txt, args := sp.BuildWithFlavor(sqlbuilder.PostgreSQL)
-	rows, err := r.conn.Query(ctx, txt, args...)
+	rows, err := r.db.QueryContext(ctx, txt, args...)
 	if err != nil {
 		return nil, err
 	}
