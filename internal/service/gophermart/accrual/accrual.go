@@ -7,15 +7,15 @@ import (
 	"github.com/vilasle/gophermart/internal/service"
 )
 
-type AccrualServiceHTTP struct {
+type AccrualService struct {
 	rep gophermart.AccrualRepository
 }
 
-func NewAccrualServiceHTTP(rep gophermart.AccrualRepository) *AccrualServiceHTTP {
-	return &AccrualServiceHTTP{rep: rep}
+func NewAccrualService(rep gophermart.AccrualRepository) *AccrualService {
+	return &AccrualService{rep: rep}
 }
 
-func (s AccrualServiceHTTP) Accruals(ctx context.Context, dto service.AccrualsFilterRequest) (service.AccrualsInfo, error) {
+func (s AccrualService) Accruals(ctx context.Context, dto service.AccrualsFilterRequest) (service.AccrualsInfo, error) {
 	if dto.Number == "" {
 		return service.AccrualsInfo{}, service.ErrInvalidFormat
 	}
@@ -26,6 +26,7 @@ func (s AccrualServiceHTTP) Accruals(ctx context.Context, dto service.AccrualsFi
 	}
 
 	return service.AccrualsInfo{
+		OrderNumber: result.Number,
 		Status:  result.Status,
 		Accrual: result.Accrual,
 	}, nil
