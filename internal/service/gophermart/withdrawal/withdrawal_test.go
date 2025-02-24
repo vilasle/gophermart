@@ -453,8 +453,8 @@ func TestWithdrawalService_Balance(t *testing.T) {
 			},
 			want: want{
 				dto: service.UserBalance{
-					Used: 1100,
-					Balance: 1000,
+					Withdrawn: 1100,
+					Current: 1000,
 				},
 				err:     nil,
 			},

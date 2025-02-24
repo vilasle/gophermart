@@ -70,11 +70,11 @@ func (s WithdrawalService) Balance(ctx context.Context, dto service.UserBalanceR
 	balance := service.UserBalance{}
 	for _, h := range r {
 		if h.Income {
-			balance.Balance += h.Sum
+			balance.Current += h.Sum
 		} else {
-			balance.Used += h.Sum
+			balance.Withdrawn += h.Sum
 		}
 	}
-	balance.Balance -= balance.Used
+	balance.Current -= balance.Withdrawn
 	return balance, nil
 }

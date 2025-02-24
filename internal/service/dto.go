@@ -31,6 +31,10 @@ type AuthorizeRequest struct {
 	Password string
 }
 
+type UserID struct {
+	ID string
+}
+
 type UserInfo struct {
 	ID string
 }
@@ -56,8 +60,8 @@ type UserBalanceRequest struct {
 }
 
 type UserBalance struct {
-	Balance float64
-	Used    float64
+	Current   float64
+	Withdrawn float64
 }
 
 type WithdrawalRequest struct {
