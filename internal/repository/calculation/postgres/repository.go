@@ -44,8 +44,6 @@ func (r CalculationRepository) SaveCalculationResult(ctx context.Context, dto de
 }
 
 func (r CalculationRepository) Calculations(ctx context.Context, dto decl.CalculationFilter) ([]decl.CalculationInfo, error) {
-	//OrderNumber string
-
 	sb := sqlbuilder.Select("order_number", "points", "status").From("calculation")
 
 	if dto.OrderNumber != "" {
