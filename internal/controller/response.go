@@ -3,16 +3,13 @@ package controller
 import (
 	"encoding/json"
 	"errors"
-	controller "github.com/vilasle/gophermart/internal/controller/gophermart"
-	"github.com/vilasle/gophermart/internal/service"
 	"net/http"
-	"time"
+
+	"github.com/vilasle/gophermart/internal/service"
 )
 
-// ControllerHandler implements HandlerFunc
 type ControllerHandler func(*http.Request) Response
 
-// define ServeHTTP to implement HandlerFunc type
 func (h ControllerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp := h(r)
 	resp.Write(w) // it calls func (t textResponse) Write(w http.ResponseWriter)  e.g.
@@ -23,103 +20,97 @@ type Response interface {
 }
 
 // /////////////////////////////////////////////////////////////////////////////////////
+type baseResponse struct {
+	data    []byte
+	cookies []http.Cookie
+	header  map[string]string
+	err     error
+}
+
+func (r baseResponse) Write(w http.ResponseWriter) {
+	for _, cookie := range r.cookies {
+		http.SetCookie(w, &cookie)
+	}
+
+	for k, v := range r.header {
+		w.Header().Set(k, v)
+	}
+
+	w.WriteHeader(getErrorCode(r.err))
+	w.Write(r.data)
+}
+
 type ResponseType = int
 
-const ( //  TODO: figure it our
-	TEXT = iota + 1
-	JSON
-	ERRORJSON
-	ERRORTEXT
-	ERROR
+const (
+	TypeText ResponseType = iota + 1
+	TypeJson
 )
 
-type simpleTextResponseNoBody struct {
-	//text string
-	token string // TODO: mb put it into data in signature like an element of a struct?
-	err   error
+type textResponse struct {
+	data    any
+	cookies []http.Cookie
+	err     error
 }
 
 type jsonResponse struct {
-	data any
-	err  error
+	data    any
+	cookies []http.Cookie
+	err     error
 }
 
-type responseWithJSError struct { // TODO: mb I can somehow unite it with JSON>?
-	emptyData []byte
-	err       error
-}
+func NewResponse(err error, data any, token string, kind ResponseType, cookies ...http.Cookie) Response {
+	if cookies == nil {
+		cookies = []http.Cookie{}
+	}
 
-type responseWithTEXTError struct { // TODO: mb I can somehow unite it with JSON>?
-	emptyData []byte
-	err       error
-}
-
-type responseWithError struct {
-	err error
-}
-
-func NewResponse(err error, data any, token string, kind ResponseType) Response {
 	switch kind {
-	case TEXT:
-		return simpleTextResponseNoBody{token: token, err: err}
-	case JSON:
-		return jsonResponse{data: data, err: err} // TODO: mb MUST use data.([]controller.OrderInf) ???
-	case ERRORJSON:
-		return responseWithJSError{emptyData: []byte(data.(string)), err: err}
-	case ERRORTEXT:
-		return responseWithTEXTError{emptyData: []byte(data.(string)), err: err}
-	case ERROR:
-		return responseWithError{err: err}
-
+	case TypeJson:
+		return jsonResponse{data: data, cookies: cookies, err: err} // TODO: mb MUST use data.([]controller.OrderInf) ???
 	default:
-		return nil
+		return textResponse{data: token, cookies: cookies, err: err}
 	}
 }
-func (r responseWithError) Write(w http.ResponseWriter) {
-	w.WriteHeader(getErrorCode(r.err))
-	return // TODO: надо ли?
-}
 
-func (r responseWithJSError) Write(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(getErrorCode(r.err))
-	// w.Write(r.emptyData) TODO: убрал запись пустых байт
-}
-
-func (r responseWithTEXTError) Write(w http.ResponseWriter) {
+func (r textResponse) Write(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(getErrorCode(r.err))
-	//w.Write(r.emptyData) TODO: убрал запись пустых байт
-}
 
-// create Write method to implement Response interface here
-func (r simpleTextResponseNoBody) Write(w http.ResponseWriter) {
-	// add token to the cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    r.token,
-		Secure:   false,
-		HttpOnly: true,
-		Expires:  time.Now().Add(controller.TokenExp), // coincides with token options
-	})
-	w.WriteHeader(getErrorCode(r.err))
-}
-
-// create Write method to implement Response interface here
-func (r jsonResponse) Write(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-
-	dataMarsh, err := json.Marshal(r.data)
-	if err != nil { //
-		intErr := `{"error": "StatusInternalServerError"}`
-		http.Error(w, intErr, http.StatusInternalServerError)
-		return // TODO: надо ли?
+	base := baseResponse{
+		data:    []byte(r.data.(string)),
+		cookies: r.cookies,
+		err:     r.err,
+		header: map[string]string{
+			"Content-Type": "text/plain",
+		},
 	}
-	w.WriteHeader(getErrorCode(r.err))
-	w.Write(dataMarsh) // TODO: how to handle it the best? http.Error ?
+
+	base.Write(w)
 }
 
-// I MUST do it cause it is not be recognized by getErrorCode (if use controller preset errors)
+func (r jsonResponse) Write(w http.ResponseWriter) {
+	var (
+		body []byte
+		err  = r.err
+	)
+
+	body, err = json.Marshal(r.data)
+	if err != nil { //
+		body = []byte(`{"error": "StatusInternalServerError"}`)
+	}
+
+	base := baseResponse{
+		data:    body,
+		cookies: r.cookies,
+		err:     r.err,
+		header: map[string]string{
+			"Content-Type": "application/json",
+		},
+	}
+
+	base.Write(w)
+
+}
+
 func getErrorCode(err error) int {
 	if err == nil {
 		return http.StatusOK
@@ -153,30 +144,3 @@ func getErrorCode(err error) int {
 	return http.StatusInternalServerError
 
 }
-
-/*
-// responses description
-type simpleResponse struct {
-	data []byte
-	err     error
-}
-// to implement Response interface
-func (r simpleResponse) Write(w http.ResponseWriter) {
-	w.WriteHeader(getStatusCode(r.err))
-
-	w.Write(r.data)
-}
-
-type JSONResponse struct {
-	sp simpleResponse
-}
-
-func NewJSONResponse(content []byte, err error) Response {
-	return JSONResponse{sp: simpleResponse{data: content, err: err}}
-}
-
-func (r JSONResponse) Write(w http.ResponseWriter) {
-	w.Header().Add("Content-Type", "application/json")
-	r.sp.Write(w)
-
-*/

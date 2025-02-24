@@ -30,7 +30,7 @@ type ProductR struct {
 }
 
 type RegisterCalculationRuleReq struct {
-	Match string                  `json:"match,required"`
+	Match string                  `json:"match"`
 	Point float64                 `json:"reward"` // TODO: тут нет же смысла выставлять omitempty?
 	Type  service.CalculationType `json:"reward_type"`
 }
@@ -47,18 +47,18 @@ type Controller struct {
 func (c Controller) OrderInfo(*http.Request) controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		if r.ContentLength != 0 { //////TODO: НУЖНО ЛИ ПРОВЕРЯТЬ CONTENT-LENGTH == 0?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.ERROR)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
 		}
 		// get an order number
 		orderNum := r.PostFormValue("number")
 		// get accrual info about th order
 		accrualInf, err := c.acrService.Accruals(r.Context(), service.AccrualsFilterRequest{Number: orderNum})
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.ERROR)
+			return controller.NewResponse(err, nil, "", controller.TypeText)
 		}
 		//fill proxy-struct to mold response
 		accInf := AccrualsInf{OrderNumber: accrualInf.OrderNumber, Status: accrualInf.Status, Accrual: accrualInf.Accrual}
-		return controller.NewResponse(nil, accInf, "", controller.JSON)
+		return controller.NewResponse(nil, accInf, "", controller.TypeJson)
 	}
 }
 
@@ -67,18 +67,18 @@ func (c Controller) RegisterOrder(*http.Request) controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		//check the body
 		if r.Body == http.NoBody { // http.NoBody - not nil, len =0
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.ERROR)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.ERROR)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
 		}
 		// proxy struct to unmarshal
 		regReq := RegisterCalculationReq{}
 		// Unmarshal login and password
 		err = json.Unmarshal(body, &regReq)
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.ERROR)
+			return controller.NewResponse(err, nil, "", controller.TypeText)
 		}
 		// fill an appropriate for service struct
 		regCalcReq := service.RegisterCalculationRequest{OrderNumber: regReq.OrderNumber}
@@ -88,9 +88,9 @@ func (c Controller) RegisterOrder(*http.Request) controller.ControllerHandler {
 		// call service method with a compatible structure (without struct tags)
 		err = c.calcService.Register(r.Context(), regCalcReq)
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.ERROR)
+			return controller.NewResponse(err, nil, "", controller.TypeText)
 		}
-		return controller.NewResponse(service.StatusOrderSuccessfullyAccepted, nil, "", controller.ERROR) // TODO: Заменить все такие случаи С ERROR на другое тут же нет ошибки
+		return controller.NewResponse(service.StatusOrderSuccessfullyAccepted, nil, "", controller.TypeText) // TODO: Заменить все такие случаи С ERROR на другое тут же нет ошибки
 	}
 }
 
@@ -102,22 +102,22 @@ func (c Controller) AddCalculationRules(*http.Request) controller.ControllerHand
 	return func(r *http.Request) controller.Response {
 		//check the body
 		if r.Body == http.NoBody { // http.NoBody - not nil, len =0
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.ERROR)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.ERROR)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
 		}
 		// fill proxy struct to deserialize
 		prRegCalcRule := RegisterCalculationRuleReq{}
 		err = json.Unmarshal(body, &prRegCalcRule)
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.ERROR)
+			return controller.NewResponse(err, nil, "", controller.TypeText)
 		}
 		err = c.calcRuleService.Register(r.Context(), service.RegisterCalculationRuleRequest{Match: prRegCalcRule.Match, Point: prRegCalcRule.Point, Type: prRegCalcRule.Type})
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.ERROR)
+			return controller.NewResponse(err, nil, "", controller.TypeText)
 		}
-		return controller.NewResponse(err, nil, "", controller.ERROR)
+		return controller.NewResponse(err, nil, "", controller.TypeText)
 	}
 }
