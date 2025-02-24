@@ -50,7 +50,7 @@ func TestCalculationService_fillRules(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "fill rules",
+			name: "fill rules fixed type",
 			fields: fields{
 				repCalc:  &MockCalculationRepository{},
 				repRules: &MockCalculationRules{},
@@ -65,6 +65,12 @@ func TestCalculationService_fillRules(t *testing.T) {
 						Match:           "test",
 						Point:           1234,
 						CalculationType: service.CalculationTypeFixed,
+					},
+					{
+						ID:              2,
+						Match:           "test",
+						Point:           1,
+						CalculationType: service.CalculationTypePercent,
 					},
 				},
 			},

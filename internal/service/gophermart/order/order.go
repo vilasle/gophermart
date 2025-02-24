@@ -2,7 +2,6 @@ package order
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/vilasle/gophermart/internal/logger"
@@ -44,83 +43,8 @@ func NewOrderService(rep gophermart.OrderRepository, accrual service.AccrualServ
 	return s
 }
 
-func (s OrderService) runCheckerDirector() {
-	for job := range s.jobs {
-		go s.runChecker(job)
-	}
-}
-
-func (s OrderService) runChecker(job checkJob) {
-	result, err := s.getAccrualInformationByOrder(job.number)
-	if err != nil {
-		logger.Error("getting information from accrual service was failed", "error", err)
-
-		logger.Debug("may by accrual service is not available, restart task")
-		s.jobs <- job
-
-		return
-	}
-
-	status := gophermart.StatusNew
-	switch result.Status {
-	case StatusProcessing:
-		status = gophermart.StatusProcessing
-	case StatusInvalid:
-		status = gophermart.StatusInvalid
-	case StatusProcessed:
-		status = gophermart.StatusProcessed
-	}
-
-	upDtp := gophermart.OrderUpdateRequest{
-		Number: job.number,
-		Status: status,
-	}
-
-	ctx := context.Background()
-	if err := s.rep.Update(ctx, upDtp); err != nil {
-		logger.Error("updating order status was failed", "error", err)
-		return
-	}
-
-	if result.Status == StatusProcessed {
-		inDto := gophermart.WithdrawalRequest{
-			UserID:      job.userID,
-			OrderNumber: job.number,
-			Sum:         result.Accrual,
-		}
-		if err := s.repTx.Income(ctx, inDto); err != nil {
-			logger.Error("adding income to user balance was failed", "error", err)
-			return
-		}
-		return
-	}
-
-	if result.Status == StatusProcessing {
-		time.AfterFunc(time.Second*10, func() {
-			s.runChecker(job)
-		})
-	}
-}
-
-func (s OrderService) getAccrualInformationByOrder(orderNumber string) (result service.AccrualsInfo, err error) {
-	for _, period := range s.checkerPeriodOnError {
-		result, err = s.accrual.Accruals(context.Background(), service.AccrualsFilterRequest{
-			Number: orderNumber,
-		})
-		if err != nil {
-			logger.Error("getting information from accrual service was failed", "error", err)
-			logger.Debug("may by accrual service is not available, go to sleep", "sec", period/time.Second)
-			time.Sleep(period)
-			continue
-		} else {
-			return result, nil
-		}
-	}
-	return result, err
-}
-
 func (s OrderService) Register(ctx context.Context, dto service.RegisterOrderRequest) error {
-	if dto.Number == "" {
+	if dto.Number == "" || dto.UserID == "" {
 		return service.ErrInvalidFormat
 	}
 
@@ -139,20 +63,18 @@ func (s OrderService) Register(ctx context.Context, dto service.RegisterOrderReq
 		UserID: dto.UserID,
 	}
 
-	err := s.rep.Create(ctx, rdt)
-
-	if err != nil {
-		if errors.Is(err, gophermart.ErrDuplicate) {
-			return service.ErrOrderUploadAnotherUser
-		}
+	if err := s.rep.Create(ctx, rdt); err != nil {
 		return err
 	}
-
-	s.jobs <- checkJob{number: dto.Number}
+	s.jobs <- checkJob{number: dto.Number, userID: dto.UserID}
 	return nil
 }
 
 func (s OrderService) List(ctx context.Context, dto service.ListOrderRequest) ([]service.OrderInfo, error) {
+	if dto.UserID == "" {
+		return nil, service.ErrInvalidFormat
+	}
+
 	rld := gophermart.OrderListRequest{
 		UserID: dto.UserID,
 	}
@@ -171,4 +93,101 @@ func (s OrderService) List(ctx context.Context, dto service.ListOrderRequest) ([
 		}
 	}
 	return orders, nil
+}
+
+func (s OrderService) Close() {
+	close(s.jobs)
+}
+
+func (s OrderService) runCheckerDirector() {
+	baseCtx := context.Background()
+	ctx, cancel := context.WithCancel(baseCtx)
+	defer cancel()
+
+	for job := range s.jobs {
+		if job.userID == "" {
+			logger.Error("user id is empty")
+			continue
+		}
+		go s.runChecker(ctx, job)
+	}
+}
+
+func (s OrderService) runChecker(ctx context.Context, job checkJob) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		result, err := s.getAccrualInformationByOrder(job.number)
+		if err != nil {
+			logger.Error("getting information from accrual service was failed", "error", err)
+
+			logger.Debug("may by accrual service is not available, restart task")
+			s.jobs <- job
+
+			return
+		}
+
+		status := defineStatus(result)
+
+		upDtp := gophermart.OrderUpdateRequest{
+			UserID: job.userID,
+			Number: job.number,
+			Status: status,
+		}
+
+		if err := s.rep.Update(ctx, upDtp); err != nil {
+			logger.Error("updating order status was failed", "error", err)
+			return
+		}
+
+		if result.Status == StatusProcessed {
+			inDto := gophermart.WithdrawalRequest{
+				UserID:      job.userID,
+				OrderNumber: job.number,
+				Sum:         result.Accrual,
+			}
+			if err := s.repTx.Income(ctx, inDto); err != nil {
+				logger.Error("adding income to user balance was failed", "error", err)
+				return
+			}
+			return
+		}
+
+		if result.Status == StatusProcessing {
+			time.AfterFunc(time.Second*10, func() {
+				s.runChecker(ctx, job)
+			})
+		}
+	}
+}
+
+func defineStatus(result service.AccrualsInfo) int {
+	switch result.Status {
+	case StatusProcessing:
+		return gophermart.StatusProcessing
+	case StatusInvalid:
+		return gophermart.StatusInvalid
+	case StatusProcessed:
+		return gophermart.StatusProcessed
+	}
+
+	return gophermart.StatusNew
+}
+
+func (s OrderService) getAccrualInformationByOrder(orderNumber string) (result service.AccrualsInfo, err error) {
+	for _, period := range s.checkerPeriodOnError {
+		result, err = s.accrual.Accruals(context.Background(), service.AccrualsFilterRequest{
+			Number: orderNumber,
+		})
+		if err != nil {
+			logger.Error("getting information from accrual service was failed", "error", err)
+			logger.Debug("may by accrual service is not available, go to sleep", "sec", period/time.Second)
+			time.Sleep(period)
+			continue
+		} else {
+			return result, nil
+		}
+	}
+	return result, err
 }
