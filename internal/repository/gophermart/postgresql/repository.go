@@ -75,7 +75,7 @@ func (r PostgresqlGophermartRepository) Expense(ctx context.Context, dto mart.Wi
 	var sum float64
 	if err := row.Scan(&sum); err == nil {
 		if sum < dto.Sum {
-			return mart.ErrDoesNotEnoughPoints
+			return mart.ErrNotEnoughPoints
 		}
 	}
 
