@@ -3,10 +3,11 @@ package accrual
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vilasle/gophermart/internal/repository/gophermart"
 	"github.com/vilasle/gophermart/internal/service"
 )
@@ -107,13 +108,13 @@ func TestAccrualServiceHTTP_Accruals(t *testing.T) {
 			s := NewAccrualService(rep)
 
 			got, err := s.Accruals(tt.args.ctx, tt.args.dto)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("AccrualServiceHTTP.Accruals() error = %v, wantErr %v", err, tt.wantErr)
-				return
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("AccrualServiceHTTP.Accruals() = %v, want %v", got, tt.want)
-			}
+
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
