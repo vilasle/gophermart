@@ -17,12 +17,12 @@ type TestService struct {
 }
 
 // can return defined errors ErrInvalidFormat, ErrDuplicate and undefined error
-func (s *TestService) Register(context.Context, RegisterRequest) (UserInfo, error) {
+func (s *TestService) Register(context.Context, service.RegisterOrderRequest) (service.UserInfo, error) {
 	return service.UserInfo{}, s.err
 }
 
 // can return defined errors ErrInvalidFormat, ErrWrongNameOrPassword and undefined error
-func (s *TestService) Authorize(context.Context, AuthorizeRequest) (UserInfo, error) {
+func (s *TestService) Authorize(context.Context, service.AuthorizeRequest) (service.UserInfo, error) {
 	return service.UserInfo{}, s.err
 }
 

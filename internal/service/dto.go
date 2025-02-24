@@ -19,6 +19,10 @@ type AuthorizeRequest struct {
 	Password string
 }
 
+type UserID struct {
+	ID string
+}
+
 type UserInfo struct {
 	ID string
 }
@@ -27,7 +31,6 @@ type RegisterOrderRequest struct {
 	Number string
 }
 
-// TODO: ?? I use userID as a token part
 type ListOrderRequest struct {
 	UserID string
 }
@@ -45,8 +48,8 @@ type UserBalanceRequest struct {
 
 // TODO: I changed that!
 type UserBalance struct {
-	Current   float64 `json:"balance"`
-	Withdrawn float64 `json:"withdrawn"`
+	Current   float64
+	Withdrawn float64
 }
 
 type WithdrawalRequest struct {
@@ -76,7 +79,7 @@ type AccrualsInfo struct {
 }
 
 type RegisterCalculationRequest struct {
-	OrderNumber string // TODO: struct tags for json?
+	OrderNumber string
 	Products    []ProductRow
 }
 

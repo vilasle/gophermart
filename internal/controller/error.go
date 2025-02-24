@@ -12,4 +12,5 @@ var (
 	ErrEntityDoesNotExists    = errors.New("entity does not exists")
 	ErrLimit                  = errors.New("limit exceeded")
 	InternalError             = errors.New("internal error")
+	ErrWrongNameOrPassword    = errors.New("wrong name or password")
 )
