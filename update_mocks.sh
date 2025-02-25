@@ -11,7 +11,3 @@ $MOCKBIN -package=withdrawal -destination=internal/service/gophermart/withdrawal
 
 $MOCKBIN -package=order -destination=internal/service/gophermart/order/repository_mock_test.go -source=internal/repository/gophermart/repository.go
 $MOCKBIN -package=order -destination=internal/service/gophermart/order/service_mock_test.go -source=internal/service/service.go
-MOCKBIN=$GOBIN/mockgen
-
-# internal/service
-$MOCKBIN -package=controller -destination=internal/controller/accrual/service_mock_test.go -source=internal/service/service.go

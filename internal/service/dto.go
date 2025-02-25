@@ -17,7 +17,8 @@ func DefineCalculationType(t int) (value CalculationType, correct bool) {
 }
 
 const (
-	CalculationTypePercent CalculationType = iota + 1
+	CalculationTypeUnknown CalculationType = iota
+	CalculationTypePercent 
 	CalculationTypeFixed
 )
 

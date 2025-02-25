@@ -1,11 +1,15 @@
-package controller
+package accrual
 
 import (
 	"encoding/json"
-	"github.com/vilasle/gophermart/internal/controller"
-	"github.com/vilasle/gophermart/internal/service"
 	"io"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/vilasle/gophermart/internal/controller"
+	"github.com/vilasle/gophermart/internal/logger"
+	"github.com/vilasle/gophermart/internal/service"
 )
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,94 +34,142 @@ type ProductR struct {
 }
 
 type RegisterCalculationRuleReq struct {
-	Match string                  `json:"match"`
-	Point float64                 `json:"reward"` // TODO: тут нет же смысла выставлять omitempty?
-	Type  service.CalculationType `json:"reward_type"`
+	Match string  `json:"match"`
+	Point float64 `json:"reward"`
+	Type  string  `json:"reward_type"`
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 type Controller struct {
-	acrService      service.AccrualService
-	calcService     service.CalculationService
-	calcRuleService service.CalculationRuleService
+	service.CalculationService
+	service.CalculationRuleService
 }
 
-// POST /api/orders/{number}
-func (c Controller) OrderInfo(*http.Request) controller.ControllerHandler {
+// GET /api/orders/{number}
+func (c Controller) OrderInfo() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		if r.ContentLength != 0 { //////TODO: НУЖНО ЛИ ПРОВЕРЯТЬ CONTENT-LENGTH == 0?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+		reqId := r.Context().Value(middleware.RequestIDKey)
+		if reqId == nil {
+			reqId = ""
 		}
-		// get an order number
-		orderNum := r.PostFormValue("number")
-		// get accrual info about th order
-		accrualInf, err := c.acrService.Accruals(r.Context(), service.AccrualsFilterRequest{Number: orderNum})
+
+		log := logger.With("id", reqId.(string))
+
+		number := chi.URLParam(r, "number")
+
+		if number == "" {
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
+		}
+
+		log.Debug("getting order info", "number", number)
+
+		calc, err := c.Calculation(r.Context(), service.CalculationFilterRequest{
+			OrderNumber: number,
+		})
+
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
-		//fill proxy-struct to mold response
-		accInf := AccrualsInf{OrderNumber: accrualInf.OrderNumber, Status: accrualInf.Status, Accrual: accrualInf.Accrual}
-		return controller.NewResponse(nil, accInf, "", controller.TypeJson)
+
+		info := AccrualsInf{
+			OrderNumber: calc.OrderNumber,
+			Status:      calc.Status,
+			Accrual:     calc.Accrual,
+		}
+
+		log.Debug("order info", "info", info)
+
+		return controller.NewResponse(nil, info, controller.TypeJson)
 	}
 }
 
 // POST /api/orders
-func (c Controller) RegisterOrder(*http.Request) controller.ControllerHandler {
+func (c Controller) RegisterOrder() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		//check the body
-		if r.Body == http.NoBody { // http.NoBody - not nil, len =0
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+		reqId := r.Context().Value(middleware.RequestIDKey)
+		if reqId == nil {
+			reqId = ""
 		}
+
+		log := logger.With("id", reqId.(string))
+
 		body, err := io.ReadAll(r.Body)
-		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+		if err != nil || len(body) == 0 {
+			log.Error("uncorrected request ", "len", len(body), "error", err)
+
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
-		// proxy struct to unmarshal
+
 		regReq := RegisterCalculationReq{}
-		// Unmarshal login and password
+
 		err = json.Unmarshal(body, &regReq)
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			log.Error("unmarshal body failed", "error", err)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
-		// fill an appropriate for service struct
+
 		regCalcReq := service.RegisterCalculationRequest{OrderNumber: regReq.OrderNumber}
 		for i := range regReq.Products {
 			regCalcReq.Products = append(regCalcReq.Products, service.ProductRow{Name: regReq.Products[i].Name, Price: regReq.Products[i].Price})
 		}
-		// call service method with a compatible structure (without struct tags)
-		err = c.calcService.Register(r.Context(), regCalcReq)
+
+		log.Debug("register calculation", "request", regCalcReq)
+
+		err = c.CalculationService.Register(r.Context(), regCalcReq)
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			log.Error("register calculation failed", "error", err)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
-		return controller.NewResponse(service.StatusOrderSuccessfullyAccepted, nil, "", controller.TypeText) // TODO: Заменить все такие случаи С ERROR на другое тут же нет ошибки
+		return controller.NewResponse(service.StatusOrderSuccessfullyAccepted, nil, controller.TypeText)
 	}
 }
 
 // POST /api/goods
-// Регистрация нового совершённого заказа. Для начисления баллов состав заказа должен быть
-// проверен на совпадения с зарегистрированными записями вознаграждений за товары. Начисляется сумма совпадений.
-// Принятый заказ не обязан браться в обработку непосредственно в момент получения запроса.
-func (c Controller) AddCalculationRules(*http.Request) controller.ControllerHandler {
+func (c Controller) AddCalculationRules() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		//check the body
-		if r.Body == http.NoBody { // http.NoBody - not nil, len =0
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+		reqId := r.Context().Value(middleware.RequestIDKey)
+		if reqId == nil {
+			reqId = ""
 		}
+
+		log := logger.With("id", reqId.(string))
+
 		body, err := io.ReadAll(r.Body)
-		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+		if err != nil || len(body) == 0 {
+			log.Error("uncorrected request ", "len", len(body), "error", err)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
-		// fill proxy struct to deserialize
+
 		prRegCalcRule := RegisterCalculationRuleReq{}
 		err = json.Unmarshal(body, &prRegCalcRule)
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			log.Error("unmarshal body failed", "error", err)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
-		err = c.calcRuleService.Register(r.Context(), service.RegisterCalculationRuleRequest{Match: prRegCalcRule.Match, Point: prRegCalcRule.Point, Type: prRegCalcRule.Type})
+
+		rewardType := convertRewardType(prRegCalcRule.Type)
+		if rewardType == service.CalculationTypeUnknown {
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
+		}
+
+		log.Debug("register calculation rule", "request", prRegCalcRule)
+		err = c.CalculationRuleService.Register(r.Context(), service.RegisterCalculationRuleRequest{Match: prRegCalcRule.Match, Point: prRegCalcRule.Point, Type: rewardType})
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			log.Error("register calculation rule failed", "error", err)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
-		return controller.NewResponse(err, nil, "", controller.TypeText)
+		return controller.NewResponse(err, nil, controller.TypeText)
+	}
+}
+
+func convertRewardType(t string) service.CalculationType {
+	switch t {
+	case "pt":
+		return service.CalculationTypeFixed
+	case "%":
+		return service.CalculationTypePercent
+	default:
+		return service.CalculationTypeUnknown
 	}
 }

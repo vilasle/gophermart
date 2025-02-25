@@ -67,15 +67,15 @@ type Controller struct {
 }
 
 // POST /api/user/register
-func (c Controller) UserRegister(*http.Request) controller.ControllerHandler {
+func (c Controller) UserRegister() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		//check the body
 		if r.Body == http.NoBody {
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
 
 		// proxy struct to unmarshal
@@ -83,7 +83,7 @@ func (c Controller) UserRegister(*http.Request) controller.ControllerHandler {
 		// Unmarshal login and password
 		err = json.Unmarshal(body, &regReq)
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
 
 		// fill the acceptable struct for response
@@ -95,30 +95,37 @@ func (c Controller) UserRegister(*http.Request) controller.ControllerHandler {
 		// Передаю логин и пароль в сервис на проверку, получаем userID
 		userID, err := c.authSvc.Register(r.Context(), user) //
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText)
 
 		}
 		// Если всё ок, то производим генерацию токена и его запись в куки
 		tokenStr, err := genJWTTokenString(userID.ID)
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
+
 		// generate response (set cookie) and response
-		return controller.NewResponse(nil, nil, tokenStr, controller.TypeText)
+		return controller.NewResponse(nil, nil, controller.TypeText, http.Cookie{
+			Name:     "token",
+			Value:    tokenStr,
+			Secure:   false,
+			HttpOnly: true,
+			Expires:  time.Now().Add(TokenExp),
+		})
 	}
 }
 
 // POST /api/user/login
 // TODO: it checks if user is registered if so => return Cookies for him
-func (c Controller) UserLogin(*http.Request) controller.ControllerHandler {
+func (c Controller) UserLogin() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		//check the body
 		if r.Body == http.NoBody { // http.NoBody - not nil, len =0
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeJson)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeJson)
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeJson)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeJson)
 		}
 
 		// proxy struct to unmarshal
@@ -126,7 +133,7 @@ func (c Controller) UserLogin(*http.Request) controller.ControllerHandler {
 		// Unmarshal login and password
 		err = json.Unmarshal(body, &regReq)
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
 		// fill the acceptable struct for response
 		user := service.AuthorizeRequest{
@@ -137,35 +144,41 @@ func (c Controller) UserLogin(*http.Request) controller.ControllerHandler {
 		// Передаю логин и пароль в сервис на проверку
 		userInfo, err := c.authSvc.Authorize(r.Context(), user) //
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
 		// Если всё ок, то производим генерацию токена
 		tokenStr, err := genJWTTokenString(userInfo.ID)
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
 		// set cookie to mold the response
-		return controller.NewResponse(nil, nil, tokenStr, controller.TypeText)
+		return controller.NewResponse(nil, nil, controller.TypeText, http.Cookie{
+			Name:     "token",
+			Value:    tokenStr,
+			Secure:   false,
+			HttpOnly: true,
+			Expires:  time.Now().Add(TokenExp),
+		})
 	}
 }
 
 // POST /api/user/orders
 // mw extract userID => to service  // if not userID - ask service to generate userID
 // upload order number, check it
-func (c Controller) RelateOrderWithUser(*http.Request) controller.ControllerHandler {
+func (c Controller) RelateOrderWithUser() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		//check the body
 		if r.Body == http.NoBody { // http.NoBody - not nil, len =0
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
 
 		// move the string(body) into the func in service to check order number (LUNA) and save it
 		err = c.orderUp.Register(r.Context(), service.RegisterOrderRequest{Number: string(body)})
-		return controller.NewResponse(err, nil, "", controller.TypeText)
+		return controller.NewResponse(err, nil, controller.TypeText)
 
 	}
 
@@ -174,23 +187,23 @@ func (c Controller) RelateOrderWithUser(*http.Request) controller.ControllerHand
 // GET /api/user/orders
 // Хендлер доступен только авторизованному пользователю. Номера заказа в выдаче должны быть отсортированы по времени
 // загрузки от самых старых к самым новым. Формат даты — RFC3339.
-func (c Controller) ListOrdersRelatedWithUser(*http.Request) controller.ControllerHandler {
+func (c Controller) ListOrdersRelatedWithUser() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		if r.ContentLength != 0 { //TODO: НУЖНО ЛИ ПРОВЕРЯТЬ CONTENT-LENGTH == 0? - ДА, ибо может быть GET с телом?
-			return controller.NewResponse(controller.ErrInvalidFormat, nil, "", controller.TypeText)
+			return controller.NewResponse(controller.ErrInvalidFormat, nil, controller.TypeText)
 		}
 		// get userID from jwt context (by the key) to get order list related with a specific user
 		userID := r.Context().Value("userID")
 		orderInfo, err := c.orderUp.List(r.Context(), service.ListOrderRequest{UserID: userID.(string)})
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
 		//fill the proxy slice of structs (with struct tags) to marshal the response
 		orInfo := make([]OrderInf, 0, len(orderInfo))
 		for i := range orderInfo {
 			orInfo = append(orInfo, OrderInf{Number: orderInfo[i].Number, Status: orderInfo[i].Status, Accrual: orderInfo[i].Accrual, CreatedAt: orderInfo[i].CreatedAt})
 		}
-		return controller.NewResponse(nil, orInfo, "", controller.TypeJson)
+		return controller.NewResponse(nil, orInfo, controller.TypeJson)
 
 	}
 }
@@ -198,21 +211,21 @@ func (c Controller) ListOrdersRelatedWithUser(*http.Request) controller.Controll
 // GET /api/user/balance
 // хендлер доступен только авторизованному пользователю. В ответе должны содержаться данные о текущей сумме баллов
 // лояльности, а также сумме использованных за весь период регистрации баллов.
-func (c Controller) BalanceStateByUser(*http.Request) controller.ControllerHandler {
+func (c Controller) BalanceStateByUser() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		if r.ContentLength != 0 { //TODO: НУЖНО ЛИ ПРОВЕРЯТЬ CONTENT-LENGTH == 0?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
 		// get userID from jwt context (by the key) to get order list related with a specific user
 		userID := r.Context().Value("userID")
 		balanceInfo, err := c.withdrawSvc.Balance(r.Context(), service.UserBalanceRequest{UserID: userID.(string)})
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
 		// fill proxy struct to marshal response
 		balInfo := UserBal{Current: balanceInfo.Current, Withdrawn: balanceInfo.Withdrawn}
 		// mold the response
-		return controller.NewResponse(nil, balInfo, "", controller.TypeJson)
+		return controller.NewResponse(nil, balInfo, controller.TypeJson)
 
 	}
 }
@@ -221,15 +234,15 @@ func (c Controller) BalanceStateByUser(*http.Request) controller.ControllerHandl
 // Хендлер доступен только авторизованному пользователю. Номер заказа представляет собой гипотетический номер
 // нового заказа пользователя, в счёт оплаты которого списываются баллы.
 // Примечание: для успешного списания достаточно успешной регистрации запроса,
-func (c Controller) Withdraw(*http.Request) controller.ControllerHandler {
+func (c Controller) Withdraw() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		//check the body
 		if r.Body == http.NoBody { // http.NoBody - not nil, len =0
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
 		// proxy struct to unmarshal OrderNumber & Sum
 		type ProductRow struct {
@@ -240,29 +253,29 @@ func (c Controller) Withdraw(*http.Request) controller.ControllerHandler {
 		//unmarshalling
 		err = json.Unmarshal(body, &withdrawalReq)
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
 
 		// get userID from jwt context (by the key) to get order list related with a specific user
 		userID := r.Context().Value("userID")
 
 		err = c.withdrawSvc.Withdraw(r.Context(), service.WithdrawalRequest{UserID: userID.(string), OrderNumber: withdrawalReq.Order, Sum: withdrawalReq.Sum})
-		return controller.NewResponse(err, nil, "", controller.TypeText)
+		return controller.NewResponse(err, nil, controller.TypeText)
 	}
 }
 
 // GET /api/user/withdrawals (AUTH only)
-func (c Controller) ListOfWithdrawals(*http.Request) controller.ControllerHandler {
+func (c Controller) ListOfWithdrawals() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		if r.ContentLength != 0 { //////TODO: НУЖНО ЛИ ПРОВЕРЯТЬ CONTENT-LENGTH == 0?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
 		// get userID from jwt context (by the key) to get order list related with a specific user
 		userID := r.Context().Value("userID")
 
 		withdrawalInfo, err := c.withdrawSvc.List(r.Context(), service.WithdrawalListRequest{UserID: userID.(string)})
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
 		// create&fill the proxy struct to marshal data in response
 		withdrawList := make([]WithdrawalInf, 0, len(withdrawalInfo))
@@ -270,7 +283,7 @@ func (c Controller) ListOfWithdrawals(*http.Request) controller.ControllerHandle
 			ent := WithdrawalInf{OrderNumber: v.OrderNumber, Sum: v.Sum, Status: v.CreatedAt.Format(time.RFC3339)}
 			withdrawList = append(withdrawList, ent)
 		}
-		return controller.NewResponse(nil, withdrawList, "", controller.TypeJson)
+		return controller.NewResponse(nil, withdrawList, controller.TypeJson)
 	}
 }
 
@@ -285,16 +298,16 @@ func (c Controller) ListOfWithdrawals(*http.Request) controller.ControllerHandle
 // POST /api/goods —  сюда посылает запрос условный АДМИН акруэла (регистрация информации о новой механике вознаграждения за товар)
 
 // GET /api/orders/{number} — получение информации о расчёте начислений баллов лояльности.
-func (c Controller) GetCalculationInfo(*http.Request) controller.ControllerHandler {
+func (c Controller) GetCalculationInfo() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		// TODO: нужно ли проверять body да и вообще что-то рповерять, ведь тут доверенный сервис?
 		//check the body
 		if r.Body == http.NoBody { // http.NoBody - not nil, len =0
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, "", controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
 		// get order number
 		orderNum := r.PathValue("number")
@@ -302,11 +315,11 @@ func (c Controller) GetCalculationInfo(*http.Request) controller.ControllerHandl
 		// get order processing info
 		accrualInf, err := c.accrualSvc.Accruals(r.Context(), service.AccrualsFilterRequest{Number: orderNum})
 		if err != nil {
-			return controller.NewResponse(err, nil, "", controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText)
 		}
 		//fill proxy-struct to mold response
 		accInf := AccrualsInf{OrderNumber: accrualInf.OrderNumber, Status: accrualInf.Status, Accrual: accrualInf.Accrual}
-		return controller.NewResponse(nil, accInf, "", controller.TypeJson)
+		return controller.NewResponse(nil, accInf, controller.TypeJson)
 	}
 }
 func genJWTTokenString(userID string) (string, error) { // создаём новый токен с алгоритмом подписи HS256 и утверждениями — Claims

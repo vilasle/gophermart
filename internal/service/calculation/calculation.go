@@ -46,9 +46,13 @@ func NewCalculationService(config CalculationServiceConfig) *CalculationService 
 
 func (c CalculationService) Register(ctx context.Context, dto service.RegisterCalculationRequest) error {
 	//save on db; line on table need for unexpected finishing service
-	addingDto := c.prepareAddingDto(dto)
+	addingQueueDto, addingCalc := c.prepareAddingDto(dto)
 
-	if err := c.repCalc.AddCalculationToQueue(ctx, addingDto...); err != nil {
+	if err := c.repCalc.AddCalculationResult(ctx, addingCalc); err != nil {
+		return err
+	}
+
+	if err := c.repCalc.AddCalculationToQueue(ctx, addingQueueDto...); err != nil {
 		return err
 	}
 
@@ -57,7 +61,7 @@ func (c CalculationService) Register(ctx context.Context, dto service.RegisterCa
 	return nil
 }
 
-func (c CalculationService) prepareAddingDto(dto service.RegisterCalculationRequest) []repository.AddingCalculation {
+func (c CalculationService) prepareAddingDto(dto service.RegisterCalculationRequest) ([]repository.AddingCalculation, repository.AddCalculationResult) {
 	addingDto := make([]repository.AddingCalculation, 0, len(dto.Products))
 
 	orderNumber := dto.OrderNumber
@@ -69,27 +73,30 @@ func (c CalculationService) prepareAddingDto(dto service.RegisterCalculationRequ
 			Price:       product.Price,
 		})
 	}
-	return addingDto
+
+	calcDto := repository.AddCalculationResult{
+		OrderNumber: orderNumber,
+		Status:      repository.Registered,
+		Value:       0,
+	}
+
+	return addingDto, calcDto
 }
 
-func (c CalculationService) Calculation(ctx context.Context, dto service.CalculationFilterRequest) ([]service.CalculationInfo, error) {
+func (c CalculationService) Calculation(ctx context.Context, dto service.CalculationFilterRequest) (service.CalculationInfo, error) {
 	result, err := c.repCalc.Calculations(ctx, repository.CalculationFilter{
 		OrderNumber: dto.OrderNumber,
 	})
 
 	if err != nil {
-		return []service.CalculationInfo{}, err
+		return service.CalculationInfo{}, err
 	}
 
 	if len(result) == 0 {
-		return []service.CalculationInfo{}, service.ErrEntityDoesNotExists
+		return service.CalculationInfo{}, service.ErrEntityDoesNotExists
 	}
 
-	info := make([]service.CalculationInfo, 0, len(result))
-	for _, v := range result {
-		info = append(info, c.fillCalculatedInfo(v))
-	}
-	return info, nil
+	return c.fillCalculatedInfo(result[0]), nil
 }
 
 func (c CalculationService) fillCalculatedInfo(dto repository.CalculationInfo) service.CalculationInfo {
@@ -125,22 +132,35 @@ func (c CalculationService) calculateOrder(ctx context.Context, event Event) {
 	number := dto.OrderNumber
 	products := dto.Products
 
-	//TODO what do I need if several rules are matched? Will be stop process when will find matched rule.
-	//May be change it
+	updateDto := repository.AddCalculationResult{
+		OrderNumber: number,
+		Value:       0,
+		Status:      repository.Processing,
+	}
+
+	err := c.repCalc.UpdateCalculationResult(ctx, updateDto)
+	if err != nil {
+		logger.Error("updating calculation result", "error", err, "data", dto)
+	}
 
 	var bonus float64
 	for _, product := range products {
-		if bonus = c.calculateProduct(product); bonus > 0 {
-			break
-		}
+		bonus += c.calculateProduct(product)
 	}
 
 	resultDto := c.fillCalculatedDto(number, bonus)
 
-	if err := c.repCalc.SaveCalculationResult(ctx, resultDto); err != nil {
+	if err := c.repCalc.UpdateCalculationResult(ctx, resultDto); err != nil {
 		logger.Error("saving calculation result", "error", err, "data", dto)
 		return
 	}
+
+	clearDto := repository.ClearingCalculationQueue{OrderNumber: number}
+	if err := c.repCalc.ClearCalculationsQueue(ctx, clearDto); err != nil {
+		logger.Error("clearing queue was failed", "error", err, "data", clearDto)
+		return
+	}
+
 }
 
 func (c CalculationService) calculateProduct(product service.ProductRow) float64 {

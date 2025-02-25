@@ -35,6 +35,20 @@ func (m *MockCalculationRepository) EXPECT() *MockCalculationRepositoryMockRecor
 	return m.recorder
 }
 
+// AddCalculationResult mocks base method.
+func (m *MockCalculationRepository) AddCalculationResult(arg0 context.Context, arg1 repository.AddCalculationResult) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddCalculationResult", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddCalculationResult indicates an expected call of AddCalculationResult.
+func (mr *MockCalculationRepositoryMockRecorder) AddCalculationResult(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddCalculationResult", reflect.TypeOf((*MockCalculationRepository)(nil).AddCalculationResult), arg0, arg1)
+}
+
 // AddCalculationToQueue mocks base method.
 func (m *MockCalculationRepository) AddCalculationToQueue(arg0 context.Context, arg1 ...repository.AddingCalculation) error {
 	m.ctrl.T.Helper()
@@ -69,18 +83,32 @@ func (mr *MockCalculationRepositoryMockRecorder) Calculations(arg0, arg1 interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Calculations", reflect.TypeOf((*MockCalculationRepository)(nil).Calculations), arg0, arg1)
 }
 
-// SaveCalculationResult mocks base method.
-func (m *MockCalculationRepository) SaveCalculationResult(arg0 context.Context, arg1 repository.AddCalculationResult) error {
+// ClearCalculationsQueue mocks base method.
+func (m *MockCalculationRepository) ClearCalculationsQueue(arg0 context.Context, arg1 repository.ClearingCalculationQueue) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveCalculationResult", arg0, arg1)
+	ret := m.ctrl.Call(m, "ClearCalculationsQueue", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SaveCalculationResult indicates an expected call of SaveCalculationResult.
-func (mr *MockCalculationRepositoryMockRecorder) SaveCalculationResult(arg0, arg1 interface{}) *gomock.Call {
+// ClearCalculationsQueue indicates an expected call of ClearCalculationsQueue.
+func (mr *MockCalculationRepositoryMockRecorder) ClearCalculationsQueue(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveCalculationResult", reflect.TypeOf((*MockCalculationRepository)(nil).SaveCalculationResult), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearCalculationsQueue", reflect.TypeOf((*MockCalculationRepository)(nil).ClearCalculationsQueue), arg0, arg1)
+}
+
+// UpdateCalculationResult mocks base method.
+func (m *MockCalculationRepository) UpdateCalculationResult(arg0 context.Context, arg1 repository.AddCalculationResult) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateCalculationResult", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateCalculationResult indicates an expected call of UpdateCalculationResult.
+func (mr *MockCalculationRepositoryMockRecorder) UpdateCalculationResult(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateCalculationResult", reflect.TypeOf((*MockCalculationRepository)(nil).UpdateCalculationResult), arg0, arg1)
 }
 
 // MockCalculationRules is a mock of CalculationRules interface.

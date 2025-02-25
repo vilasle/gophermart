@@ -50,6 +50,20 @@ func (mr *MockAuthorizationServiceMockRecorder) Authorize(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Authorize", reflect.TypeOf((*MockAuthorizationService)(nil).Authorize), arg0, arg1)
 }
 
+// CheckByUserID mocks base method.
+func (m *MockAuthorizationService) CheckByUserID(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckByUserID", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CheckByUserID indicates an expected call of CheckByUserID.
+func (mr *MockAuthorizationServiceMockRecorder) CheckByUserID(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckByUserID", reflect.TypeOf((*MockAuthorizationService)(nil).CheckByUserID), arg0, arg1)
+}
+
 // Register mocks base method.
 func (m *MockAuthorizationService) Register(arg0 context.Context, arg1 service.RegisterRequest) (service.UserInfo, error) {
 	m.ctrl.T.Helper()

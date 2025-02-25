@@ -5,13 +5,13 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/vilasle/gophermart/internal/repository/calculation"
+	repository "github.com/vilasle/gophermart/internal/repository/calculation"
 	"github.com/vilasle/gophermart/internal/service"
 )
 
 type RuleServiceConfig struct {
-	CalculationRules repository.CalculationRules
-	EventManager     *EventManager
+	Repository   repository.CalculationRules
+	EventManager *EventManager
 }
 
 type RuleService struct {
@@ -21,7 +21,7 @@ type RuleService struct {
 
 func NewRuleService(config RuleServiceConfig) *RuleService {
 	return &RuleService{
-		rep:     config.CalculationRules,
+		rep:     config.Repository,
 		manager: config.EventManager,
 	}
 }
@@ -44,7 +44,9 @@ func (s RuleService) Register(ctx context.Context, dto service.RegisterCalculati
 	})
 
 	if err != nil {
-		//TODO wrap error
+		if err == repository.ErrDuplicate {
+			return service.ErrDuplicate
+		}
 		return err
 	}
 
@@ -53,7 +55,6 @@ func (s RuleService) Register(ctx context.Context, dto service.RegisterCalculati
 	return nil
 
 }
-
 
 type rule struct {
 	exp             *regexp.Regexp

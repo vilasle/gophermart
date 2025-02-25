@@ -8,7 +8,7 @@ import (
 	"github.com/vilasle/gophermart/internal/service"
 )
 
-type ControllerHandler func(*http.Request) Response
+type ControllerHandler func(r *http.Request) Response
 
 func (h ControllerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp := h(r)
@@ -59,7 +59,7 @@ type jsonResponse struct {
 	err     error
 }
 
-func NewResponse(err error, data any, token string, kind ResponseType, cookies ...http.Cookie) Response {
+func NewResponse(err error, data any, kind ResponseType, cookies ...http.Cookie) Response {
 	if cookies == nil {
 		cookies = []http.Cookie{}
 	}
@@ -68,15 +68,21 @@ func NewResponse(err error, data any, token string, kind ResponseType, cookies .
 	case TypeJson:
 		return jsonResponse{data: data, cookies: cookies, err: err} // TODO: mb MUST use data.([]controller.OrderInf) ???
 	default:
-		return textResponse{data: token, cookies: cookies, err: err}
+		return textResponse{data: data, cookies: cookies, err: err}
 	}
 }
 
 func (r textResponse) Write(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/plain")
 
+	var body []byte
+
+	if v, ok := r.data.(string); ok {
+		body = []byte(v)
+	}
+
 	base := baseResponse{
-		data:    []byte(r.data.(string)),
+		data:    body,
 		cookies: r.cookies,
 		err:     r.err,
 		header: map[string]string{

@@ -5,8 +5,10 @@ import "context"
 //go:generate mockgen -package=calculation -destination=../service/calculation/repository_mock_test.go -source=repository.go
 type CalculationRepository interface {
 	AddCalculationToQueue(context.Context, ...AddingCalculation) error
+	ClearCalculationsQueue(context.Context, ClearingCalculationQueue) error
 
-	SaveCalculationResult(context.Context, AddCalculationResult) error
+	AddCalculationResult(context.Context, AddCalculationResult) error
+	UpdateCalculationResult(context.Context, AddCalculationResult) error
 
 	Calculations(context.Context, CalculationFilter) ([]CalculationInfo, error)
 }

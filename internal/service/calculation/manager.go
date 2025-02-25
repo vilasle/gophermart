@@ -3,6 +3,8 @@ package calculation
 import (
 	"context"
 	"sync/atomic"
+
+	"github.com/vilasle/gophermart/internal/logger"
 )
 
 type EventType = int
@@ -37,10 +39,12 @@ func NewEventManager(ctx context.Context) *EventManager {
 }
 
 func (em *EventManager) RaiseEvent(name EventType, data any) {
-	//manager is finished
 	if em.Stopped() {
 		return
 	}
+
+	logger.Debug("got event", "name", name, "data", data)
+
 	em.events <- Event{name, data}
 }
 

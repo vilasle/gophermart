@@ -1,4 +1,4 @@
-package gzip
+package middleware
 
 import (
 	"compress/gzip"

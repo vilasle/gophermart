@@ -1,4 +1,4 @@
-package controller
+package accrual
 
 import (
 	"testing"

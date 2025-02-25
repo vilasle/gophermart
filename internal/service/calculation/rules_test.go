@@ -55,7 +55,7 @@ func TestRuleService_Register(t *testing.T) {
 			em := NewEventManager(tt.args.ctx)
 
 			cfg := RuleServiceConfig{
-				CalculationRules: rep,
+				Repository: rep,
 				EventManager:     em,
 			}
 

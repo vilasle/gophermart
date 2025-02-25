@@ -3,16 +3,22 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/huandu/go-sqlbuilder"
+	"github.com/jackc/pgx/v5/pgconn"
 	decl "github.com/vilasle/gophermart/internal/repository/calculation"
+)
+
+const (
+	codeDuplicateKey = "23505"
 )
 
 type CalculationRepository struct {
 	db *sql.DB
 }
 
-func NewPostgresCalculationRepository(conn *sql.DB) (CalculationRepository, error) {
+func NewCalculationRepository(conn *sql.DB) (CalculationRepository, error) {
 	r := CalculationRepository{db: conn}
 
 	if err := r.createSchemeIfNotExists(); err != nil {
@@ -22,25 +28,52 @@ func NewPostgresCalculationRepository(conn *sql.DB) (CalculationRepository, erro
 }
 
 func (r CalculationRepository) AddCalculationToQueue(ctx context.Context, dto ...decl.AddingCalculation) error {
-	sb := sqlbuilder.InsertInto("calculation_queue").Cols("order_number", "product_name", "price")
+	sb := sqlbuilder.InsertInto("calculation_queue").
+		Cols("order_number", "product_name", "price")
+
 	for _, v := range dto {
 		sb.Values(v.OrderNumber, v.ProductName, v.Price)
 	}
 	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
 	_, err := r.db.ExecContext(ctx, txt, args...)
-	//TODO check and wrap error
-	return err
+
+	return getRepositoryError(err)
 }
 
-func (r CalculationRepository) SaveCalculationResult(ctx context.Context, dto decl.AddCalculationResult) error {
+func (r CalculationRepository) ClearCalculationsQueue(ctx context.Context, dto decl.ClearingCalculationQueue) error {
+	sb := sqlbuilder.DeleteFrom("calculation_queue")
+	sb.Where(sb.Equal("order_number", dto.OrderNumber))
+
+	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
+	_, err := r.db.ExecContext(ctx, txt, args...)
+
+	return getRepositoryError(err)
+}
+
+func (r CalculationRepository) AddCalculationResult(ctx context.Context, dto decl.AddCalculationResult) error {
 	txt, args := sqlbuilder.InsertInto("calculation").
 		Cols("order_number", "points", "status").
 		Values(dto.OrderNumber, dto.Value, dto.Status).
 		BuildWithFlavor(sqlbuilder.PostgreSQL)
 
 	_, err := r.db.ExecContext(ctx, txt, args...)
-	//TODO check and wrap error
-	return err
+
+	return getRepositoryError(err)
+}
+
+func (r CalculationRepository) UpdateCalculationResult(ctx context.Context, dto decl.AddCalculationResult) error {
+	sb := sqlbuilder.Update("calculation")
+	sb.Set(
+		sb.Equal("status", dto.Status),
+		sb.Equal("points", dto.Value),
+	)
+	sb.Where(sb.Equal("order_number", dto.OrderNumber))
+
+	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
+
+	_, err := r.db.ExecContext(ctx, txt, args...)
+
+	return getRepositoryError(err)
 }
 
 func (r CalculationRepository) Calculations(ctx context.Context, dto decl.CalculationFilter) ([]decl.CalculationInfo, error) {
@@ -54,8 +87,7 @@ func (r CalculationRepository) Calculations(ctx context.Context, dto decl.Calcul
 
 	rows, err := r.db.QueryContext(ctx, txt, args...)
 	if err != nil {
-		//TODO check and wrap error
-		return nil, err
+		return nil, getRepositoryError(err)
 	}
 
 	result := make([]decl.CalculationInfo, 0)
@@ -63,12 +95,11 @@ func (r CalculationRepository) Calculations(ctx context.Context, dto decl.Calcul
 		var c decl.CalculationInfo
 		err := rows.Scan(&c.OrderNumber, &c.Value, &c.Status)
 		if err != nil {
-			//TODO check and wrap error
-			return nil, err
+			return nil, getRepositoryError(err)
 		}
 		result = append(result, c)
 	}
-	return result, rows.Err()
+	return result, getRepositoryError(rows.Err())
 
 }
 
@@ -81,8 +112,8 @@ func (r CalculationRepository) AddRules(ctx context.Context, dto ...decl.AddingR
 	row := r.db.QueryRowContext(ctx, txt, args...)
 
 	err = row.Scan(&id)
-	//TODO check and wrap error
-	return id, err
+
+	return id, getRepositoryError(err)
 }
 
 func (r CalculationRepository) Rules(ctx context.Context, dto decl.RuleFilter) ([]decl.RuleInfo, error) {
@@ -95,16 +126,31 @@ func (r CalculationRepository) Rules(ctx context.Context, dto decl.RuleFilter) (
 	txt, args := sp.BuildWithFlavor(sqlbuilder.PostgreSQL)
 	rows, err := r.db.QueryContext(ctx, txt, args...)
 	if err != nil {
-		return nil, err
+		return nil, getRepositoryError(err)
 	}
 	rules := make([]decl.RuleInfo, 0)
 	for rows.Next() {
 		var rule decl.RuleInfo
 		err := rows.Scan(&rule.ID, &rule.Match, &rule.Point, &rule.CalculationType)
 		if err != nil {
-			return nil, err
+			return nil, getRepositoryError(err)
 		}
 		rules = append(rules, rule)
 	}
 	return rules, nil
+}
+
+func getRepositoryError(err error) error {
+	if err != nil {
+		return err
+	}
+
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case codeDuplicateKey:
+			return decl.ErrDuplicate
+		}
+	}
+	return err
 }

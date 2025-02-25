@@ -1,13 +1,15 @@
-package logger
+package middleware
 
 import (
 	"log/slog"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-func slogMiddleware(next http.Handler) http.Handler {
+func Logger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 		start := time.Now()
@@ -26,12 +28,15 @@ func slogMiddleware(next http.Handler) http.Handler {
 		// get request duration
 		duration := time.Since(start)
 
-		logger.Info("event",
-			slog.String("uri", r.RequestURI),
-			slog.String("method", r.Method),
-			slog.Int("status", responseData.status),
-			slog.Duration("duration", duration),
-			slog.Int("size", responseData.size),
+		id := r.Context().Value(middleware.RequestIDKey).(string)
+
+		logger.Info("received request",
+			"id", id,
+			"uri", r.RequestURI,
+			"method", r.Method,
+			"status", responseData.status,
+			"duration", duration,
+			"size", responseData.size,
 		)
 
 	})

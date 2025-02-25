@@ -31,6 +31,7 @@ func (r CalculationRepository) createCalculationQueueScheme() error {
 			price REAL NOT NULL
 		);
 		CREATE INDEX IF NOT EXISTS calculation_queue_order_number_idx ON calculation_queue (order_number);
+		CREATE INDEX IF NOT EXISTS calculation_queue_product_name_idx ON calculation_queue (product_name);
 	`)
 
 	return err
