@@ -34,7 +34,18 @@ func initCli() cliArgs {
 	pflag.BoolVarP(&args.debug, "debug", "D", false, "enable debug message")
 	pflag.Parse()
 
+	args.addr = getEnv("RUN_ADDRESS", args.addr)
+	args.dbUrl = getEnv("DATABASE_URI", args.dbUrl)
+
 	return args
+}
+
+func getEnv(key, fallback string) string {
+	result := fallback
+	if value, _ := os.LookupEnv(key); value != "" {
+		result = value
+	}
+	return result
 }
 
 func main() {
@@ -58,7 +69,7 @@ func main() {
 
 	db, err := sql.Open("pgx", args.dbUrl)
 	if err != nil {
-		logger.Error("Unable to connect to database\n", "url", args.dbUrl)
+		logger.Error("connecting to database failed", "url", args.dbUrl, "error", err)
 		os.Exit(1)
 	}
 	defer db.Close()
@@ -96,7 +107,7 @@ func main() {
 	mux.Method(http.MethodPost, "/api/goods", ctrl.AddCalculationRules())
 
 	server := http.Server{
-		Addr:         ":8080",
+		Addr:         args.addr,
 		ReadTimeout:  time.Second * 10,
 		WriteTimeout: time.Second * 10,
 		IdleTimeout:  time.Second * 60,

@@ -18,7 +18,7 @@ func (r PostgresqlGophermartRepository) createUserTable() error {
 			id UUID PRIMARY KEY, 
 			login VARCHAR(255) 
 			UNIQUE NOT NULL, 
-			password VARCHAR(64)
+			password BYTEA
 		);
 
 		CREATE INDEX IF NOT EXISTS "user_login_idx" ON "user" (login);

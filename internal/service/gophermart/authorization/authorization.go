@@ -25,7 +25,7 @@ func (svc AuthorizationService) Register(ctx context.Context, dto service.Regist
 	hash := svc.createHash(dto.Password)
 	user := gophermart.AuthData{
 		Login:        dto.Login,
-		PasswordHash: string(hash[:]),
+		PasswordHash: hash[:],
 	}
 
 	result, err := svc.rep.AddUser(ctx, user)
@@ -47,7 +47,6 @@ func (svc AuthorizationService) Authorize(ctx context.Context, dto service.Autho
 	hash := svc.createHash(dto.Password)
 	user := gophermart.AuthData{
 		Login:        dto.Login,
-		PasswordHash: string(hash[:]),
 	}
 
 	result, err := svc.rep.CheckUser(ctx, user)
@@ -67,6 +66,21 @@ func (svc AuthorizationService) Authorize(ctx context.Context, dto service.Autho
 	return service.UserInfo{
 		ID: result.ID,
 	}, nil
+}
+
+func (svc AuthorizationService) CheckByUserID(ctx context.Context, id string) error {
+	if id == "" {
+		return service.ErrInvalidFormat
+	}
+
+	_, err := svc.rep.CheckUserById(ctx, id)
+	if err != nil {
+		if errors.Is(err, gophermart.ErrEmptyResult) {
+			return service.ErrEntityDoesNotExists
+		}
+		return err
+	}
+	return nil
 }
 
 func (svc AuthorizationService) createHash(password string) [32]byte {

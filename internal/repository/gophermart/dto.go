@@ -4,13 +4,13 @@ import "time"
 
 type AuthData struct {
 	Login        string
-	PasswordHash string
+	PasswordHash []byte
 }
 
 type UserInfo struct {
 	ID           string
 	Login        string
-	PasswordHash string
+	PasswordHash []byte
 }
 
 type WithdrawalRequest struct {

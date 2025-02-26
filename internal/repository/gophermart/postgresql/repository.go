@@ -3,10 +3,16 @@ package postgresql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/huandu/go-sqlbuilder"
+	"github.com/jackc/pgx/v5/pgconn"
 	mart "github.com/vilasle/gophermart/internal/repository/gophermart"
+)
+
+const (
+	codeDuplicateKey = "23505"
 )
 
 type PostgresqlGophermartRepository struct {
@@ -20,30 +26,45 @@ func NewPostgresqlGophermartRepository(db *sql.DB) (*PostgresqlGophermartReposit
 
 // AuthorizationRepository
 func (r PostgresqlGophermartRepository) AddUser(ctx context.Context, dto mart.AuthData) (mart.UserInfo, error) {
-	sb := sqlbuilder.InsertInto("users").
-		Cols("id", "login", "password").
-		Values("gen_random_uuid()", dto.Login, dto.PasswordHash).
-		Returning("id")
+	sb := sqlbuilder.InsertInto(`"user"`).Cols("id", "login", "password")
+	sb.Values(sqlbuilder.Raw("gen_random_uuid()"), dto.Login, dto.PasswordHash)
+	sb.Returning("id")
 
 	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
 	row := r.db.QueryRowContext(ctx, txt, args...)
 
 	var id string
 	err := row.Scan(&id)
-	return mart.UserInfo{ID: id}, err
+	return mart.UserInfo{ID: id}, getRepositoryError(err)
 }
 
 func (r PostgresqlGophermartRepository) CheckUser(ctx context.Context, dto mart.AuthData) (mart.UserInfo, error) {
-	sb := sqlbuilder.Select("id", "login", "password").From("users")
+	sb := sqlbuilder.Select("id", "login", "password").From(`"user"`)
 	sb.Where(sb.Equal("login", dto.Login))
 
 	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
 	row := r.db.QueryRowContext(ctx, txt, args...)
 
-	var id, login, password string
+	var id, login string
+	var password []byte
 	err := row.Scan(&id, &login, &password)
 
-	return mart.UserInfo{ID: id, Login: login, PasswordHash: password}, err
+	return mart.UserInfo{ID: id, Login: login, PasswordHash: password}, getRepositoryError(err)
+}
+
+func (r PostgresqlGophermartRepository) CheckUserById(ctx context.Context, reqId string) (mart.UserInfo, error) {
+	sb := sqlbuilder.Select("id", "login", "password").From(`"user"`)
+	sb.Where(sb.Equal("id", reqId))
+
+	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
+	row := r.db.QueryRowContext(ctx, txt, args...)
+
+	var id, login string
+	var password []byte
+
+	err := row.Scan(&id, &login, &password)
+
+	return mart.UserInfo{ID: id, Login: login, PasswordHash: password}, getRepositoryError(err)
 }
 
 // WithdrawalRepository
@@ -60,7 +81,7 @@ func (r PostgresqlGophermartRepository) Expense(ctx context.Context, dto mart.Wi
 
 	sbAdd := sqlbuilder.InsertInto("transactions").
 		Cols("order_number", "user_id", "income", "sum", "created_at").
-		Values(dto.OrderNumber, dto.UserID, false, v, "now()")
+		Values(dto.OrderNumber, dto.UserID, false, v, sqlbuilder.Raw("now()"))
 
 	txt2, args2 := sbAdd.BuildWithFlavor(sqlbuilder.PostgreSQL)
 
@@ -80,7 +101,7 @@ func (r PostgresqlGophermartRepository) Expense(ctx context.Context, dto mart.Wi
 	}
 
 	if _, err := tx.ExecContext(ctx, txt2, args2...); err != nil {
-		return err
+		return getRepositoryError(err)
 	}
 
 	return tx.Commit()
@@ -93,15 +114,12 @@ func (r PostgresqlGophermartRepository) Income(ctx context.Context, dto mart.Wit
 	}
 	sbAdd := sqlbuilder.InsertInto("transactions").
 		Cols("order_number", "user_id", "income", "sum", "created_at").
-		Values(dto.OrderNumber, dto.UserID, true, v, "now()")
+		Values(dto.OrderNumber, dto.UserID, true, v, sqlbuilder.Raw("now()"))
 
 	txt, args := sbAdd.BuildWithFlavor(sqlbuilder.PostgreSQL)
 
 	_, err := r.db.ExecContext(ctx, txt, args...)
-	if err != nil {
-		return err
-	}
-	return err
+	return getRepositoryError(err)
 
 }
 
@@ -118,9 +136,10 @@ func (r PostgresqlGophermartRepository) Transactions(ctx context.Context, dto ma
 	transactions := make([]mart.Transaction, 0)
 	for rows.Next() {
 		transaction := mart.Transaction{}
-		err := rows.Scan(&transaction.OrderNumber, &transaction.UserID, &transaction.Income, &transaction.Sum, &transaction.CreatedAt)
-		if err != nil {
-			return nil, err
+		if err := rows.Scan(&transaction.OrderNumber, &transaction.UserID, &transaction.Income,
+			&transaction.Sum, &transaction.CreatedAt); err != nil {
+
+			return nil, getRepositoryError(err)
 		}
 		transactions = append(transactions, transaction)
 	}
@@ -131,11 +150,11 @@ func (r PostgresqlGophermartRepository) Transactions(ctx context.Context, dto ma
 func (r PostgresqlGophermartRepository) Create(ctx context.Context, dto mart.OrderCreateRequest) error {
 	sb := sqlbuilder.InsertInto("order").
 		Cols("number", "user_id", "create_at", "status", "sum").
-		Values(dto.Number, dto.UserID, "now()", mart.StatusNew, 0)
+		Values(dto.Number, dto.UserID, sqlbuilder.Raw("now()"), mart.StatusNew, 0)
 
 	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
 	_, err := r.db.ExecContext(ctx, txt, args...)
-	return err
+	return getRepositoryError(err)
 }
 
 func (r PostgresqlGophermartRepository) Update(ctx context.Context, dto mart.OrderUpdateRequest) error {
@@ -146,7 +165,7 @@ func (r PostgresqlGophermartRepository) Update(ctx context.Context, dto mart.Ord
 
 	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
 	_, err := r.db.ExecContext(ctx, txt, args...)
-	return err
+	return getRepositoryError(err)
 }
 
 func (r PostgresqlGophermartRepository) List(ctx context.Context, dto mart.OrderListRequest) ([]mart.OrderInfo, error) {
@@ -158,7 +177,7 @@ func (r PostgresqlGophermartRepository) List(ctx context.Context, dto mart.Order
 	txt, args := sp.BuildWithFlavor(sqlbuilder.PostgreSQL)
 	rows, err := r.db.QueryContext(ctx, txt, args...)
 	if err != nil {
-		return nil, err
+		return nil, getRepositoryError(err)
 	}
 
 	orders := make([]mart.OrderInfo, 0)
@@ -166,9 +185,29 @@ func (r PostgresqlGophermartRepository) List(ctx context.Context, dto mart.Order
 		order := mart.OrderInfo{}
 		err := rows.Scan(&order.Number, &order.CreatedAt, &order.Status, &order.Accrual)
 		if err != nil {
-			return nil, err
+			return nil, getRepositoryError(err)
 		}
 		orders = append(orders, order)
 	}
 	return orders, nil
+}
+
+func getRepositoryError(err error) error {
+	if err == nil {
+		return err
+	}
+
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case codeDuplicateKey:
+			return mart.ErrDuplicate
+		}
+	}
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return mart.ErrEmptyResult
+	}
+
+	return err
 }

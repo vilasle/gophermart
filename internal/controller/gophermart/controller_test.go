@@ -1,4 +1,4 @@
-package controller
+package gophermart
 
 import (
 	"testing"

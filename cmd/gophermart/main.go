@@ -1,46 +1,161 @@
 package main
 
+import (
+	"context"
+	"database/sql"
+	"net/http"
+	"net/url"
+	"os"
+	"os/signal"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/spf13/pflag"
+
+	"github.com/vilasle/gophermart/internal/logger"
+	_middleware "github.com/vilasle/gophermart/internal/middleware"
+	"github.com/vilasle/gophermart/internal/service/gophermart/accrual"
+	"github.com/vilasle/gophermart/internal/service/gophermart/authorization"
+	"github.com/vilasle/gophermart/internal/service/gophermart/order"
+	"github.com/vilasle/gophermart/internal/service/gophermart/withdrawal"
+
+	httpRep "github.com/vilasle/gophermart/internal/repository/gophermart/http"
+	pgRep "github.com/vilasle/gophermart/internal/repository/gophermart/postgresql"
+
+	"github.com/vilasle/gophermart/internal/controller/gophermart"
+)
+
+type cliArgs struct {
+	addr        string
+	accrualAddr string
+	dbUrl       string
+	debug       bool
+}
+
+func initCli() cliArgs {
+	args := cliArgs{}
+	pflag.StringVarP(&args.addr, "address", "a", ":8080", "address to listen on")
+	pflag.StringVarP(&args.dbUrl, "database", "d", "", "database url e.g postgres://postgres:postgres@localhost:5432/postgres")
+	pflag.StringVarP(&args.accrualAddr, "accrual", "r", "", "accrual endpoint")
+
+	pflag.BoolVarP(&args.debug, "debug", "D", false, "enable debug message")
+	pflag.Parse()
+
+	args.addr = getEnv("RUN_ADDRESS", args.addr)
+	args.dbUrl = getEnv("DATABASE_URI", args.dbUrl)
+	args.accrualAddr = getEnv("ACCRUAL_SYSTEM_ADDRESS", args.accrualAddr)
+
+	return args
+}
+
+func getEnv(key, fallback string) string {
+	result := fallback
+	if value, _ := os.LookupEnv(key); value != "" {
+		result = value
+	}
+	return result
+}
+
 func main() {
+	args := initCli()
 
-	// init router
-	/*	r := chi.NewRouter()
+	if args.debug {
+		logger.Init(os.Stdout, logger.DebugLevel)
+	} else {
+		logger.Init(os.Stdout, logger.InfoLevel)
+	}
 
+	if args.dbUrl == "" {
+		logger.Error("database url is required")
+		pflag.Usage()
+		os.Exit(1)
+	}
 
-			// chi routing (to exclude some jwt middleware influence from register and login endpoints)
-			r.Route("/api/user", func(r chi.Router) {
-				// set logger for chi-route Group
-				r.Use(l.LogMW) // TODO: implement logger middleware
-				r.Use(gzipMW.GzMW) // TODO: remove it from here????
+	accrualUrl, err := url.Parse(args.accrualAddr)
+	if err != nil {
+		logger.Error("can not parse accrual endpoint address", "error", err)
+		os.Exit(1)
+	}
 
-				r.Post("/register", c.UserRegister())
-				r.Post("/login", c.UserLogin())
+	ctx := context.Background()
 
-			}
+	db, err := sql.Open("pgx", args.dbUrl)
+	if err != nil {
+		logger.Error("connecting to database failed", "url", args.dbUrl, "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
 
-			r.Route("/api/user", func(r chi.Router) {
-				// set logger for chi-route Group
-				r.Use(l.LogMW) // TODO: implement logger middleware
-				r.Use(gzipMW.GzMW)
-				r.Use(jwt) // TODO: implement jwt middleware
+	dbRep, err := pgRep.NewPostgresqlGophermartRepository(db)
+	if err != nil {
+		logger.Error("can not init gophermart repository", "error", err)
+		os.Exit(1)
+	}
 
-				r.Get("/orders", c.ListOrdersRelatedWithUser())
-				r.Post("/orders", c.RelateOrderWithUser())
-				r.Get("/balance", c.BalanceStateByUser())
-				r.Post("/withdraw", c.Withdraw())
-				r.Get("/withdrawals", c.ListOfWithdrawals())
+	withdrawalSvc := withdrawal.NewWithdrawalService(dbRep)
 
-			}
+	authSvc := authorization.NewAuthorizationService(dbRep)
 
-			r.Route("/api", func(r chi.Router) {
-				// set logger for chi-route Group
-				r.Use(l.LogMW) // TODO: implement logger middleware
-				r.Use(gzipMW.GzMW) // TODO: remove it or not????????????
+	accrualSvc := accrual.NewAccrualService(
+		httpRep.NewAccrualRepository(accrualUrl),
+	)
 
-				r.Get("/orders/{number}", c.SOMEHANDLER())
+	orderSvc := order.NewOrderService(dbRep, accrualSvc, dbRep)
 
+	ctrl := gophermart.Controller{
+		AuthSvc:     authSvc,
+		OrderSvc:    orderSvc,
+		WithdrawSvc: withdrawalSvc,
+	}
 
-			}
+	mux := chi.NewMux()
+
+	mux.Use(middleware.RequestID)
+	mux.Use(_middleware.Logger)
+	mux.Use(middleware.Recoverer)
+
+	mux.Method(http.MethodPost, "/api/user/register", ctrl.UserRegister())
+	mux.Method(http.MethodPost, "/api/user/login", ctrl.UserLogin())
+
+	mux.Route("/api/user/orders", func(r chi.Router) {
+		r.Use(_middleware.GzMW)
+		r.Method(http.MethodPost, "/", ctrl.RelateOrderWithUser())
+		r.Method(http.MethodGet, "/", ctrl.ListOrdersRelatedWithUser())
+	})
+
+	mux.Route("/api/user/balance", func(r chi.Router) {
+		r.Use(_middleware.GzMW)
+		r.Method(http.MethodGet, "/", ctrl.BalanceStateByUser())
+		r.Method(http.MethodPost, "/withdraw", ctrl.Withdraw())
+	})
+
+	mux.Route("/api/user/withdrawals", func(r chi.Router) {
+		r.Use(_middleware.GzMW)
+		r.Method(http.MethodGet, "/", ctrl.ListOfWithdrawals())
+	})
+
+	server := http.Server{
+		Addr:         args.addr,
+		ReadTimeout:  time.Second * 10,
+		WriteTimeout: time.Second * 10,
+		IdleTimeout:  time.Second * 60,
+		Handler:      mux,
+	}
+
+	sigint := make(chan os.Signal, 1)
+	signal.Notify(sigint, os.Interrupt)
+
+	go func() {
+		logger.Info("starting server", "address", args.addr)
+		if err := server.ListenAndServe(); err != nil {
+			logger.Error("starting server failed", "error", err)
 		}
+		sigint <- os.Interrupt
+	}()
 
-	*/
+	<-sigint
+	server.Shutdown(ctx)
+
 }

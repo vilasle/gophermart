@@ -21,7 +21,7 @@ func NewAccrualRepository(addr *url.URL) *AccrualRepository {
 }
 
 func (r AccrualRepository) AccrualByOrder(ctx context.Context, dto mart.AccrualRequest) (mart.AccrualInfo, error) {
-	numberAddr := r.addr.JoinPath(dto.OrderNumber)
+	numberAddr := r.addr.JoinPath("orders", dto.OrderNumber)
 
 	cl := &http.Client{Timeout: 10 * time.Second}
 

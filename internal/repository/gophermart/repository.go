@@ -3,7 +3,7 @@ package gophermart
 import "context"
 
 const (
-	StatusNew        int = iota + 1
+	StatusNew int = iota + 1
 	StatusProcessing
 	StatusInvalid
 	StatusProcessed
@@ -12,6 +12,7 @@ const (
 type AuthorizationRepository interface {
 	AddUser(context.Context, AuthData) (UserInfo, error)
 	CheckUser(context.Context, AuthData) (UserInfo, error)
+	CheckUserById(context.Context, string) (UserInfo, error)
 }
 
 type WithdrawalRepository interface {
