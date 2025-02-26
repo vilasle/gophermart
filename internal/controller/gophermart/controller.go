@@ -160,10 +160,18 @@ func (c Controller) RelateOrderWithUser() controller.ControllerHandler {
 			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
 
-		// move the string(body) into the func in service to check order number (LUNA) and save it
-		err = c.OrderSvc.Register(r.Context(), service.RegisterOrderRequest{Number: string(body)})
-		return controller.NewResponse(err, nil, controller.TypeText)
+		userId, ok := r.Context().Value("userID").(string)
+		if !ok {
+			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText)
+		}
 
+		// move the string(body) into the func in service to check order number (LUNA) and save it
+		err = c.OrderSvc.Register(r.Context(), service.RegisterOrderRequest{
+			Number: string(body),
+			UserID: userId,
+		})
+
+		return controller.NewResponse(err, nil, controller.TypeText)
 	}
 
 }
@@ -254,7 +262,7 @@ func (c Controller) ListOfWithdrawals() controller.ControllerHandler {
 func genJWTTokenString(userID string) (string, error) {
 	type JWTClaims struct {
 		jwt.RegisteredClaims
-		userID string
+		UserID string
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, JWTClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -262,7 +270,7 @@ func genJWTTokenString(userID string) (string, error) {
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(TokenExp)),
 		},
 		// set my own statement
-		userID: userID,
+		UserID: userID,
 	})
 
 	// создаём строку токена с подписью

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -74,12 +73,12 @@ func (r PostgresqlGophermartRepository) Expense(ctx context.Context, dto mart.Wi
 		v = -v
 	}
 
-	sbCh := sqlbuilder.Select("SUM(sum)").From("transaction").GroupBy("user_id")
+	sbCh := sqlbuilder.Select("SUM(sum)").From(`"transaction"`).GroupBy("user_id")
 	sbCh.Where(sbCh.Equal("user_id", dto.UserID))
 
 	txt1, args1 := sbCh.BuildWithFlavor(sqlbuilder.PostgreSQL)
 
-	sbAdd := sqlbuilder.InsertInto("transactions").
+	sbAdd := sqlbuilder.InsertInto(`"transaction"`).
 		Cols("order_number", "user_id", "income", "sum", "created_at").
 		Values(dto.OrderNumber, dto.UserID, false, v, sqlbuilder.Raw("now()"))
 
@@ -112,7 +111,7 @@ func (r PostgresqlGophermartRepository) Income(ctx context.Context, dto mart.Wit
 	if v < 0 {
 		v = -v
 	}
-	sbAdd := sqlbuilder.InsertInto("transactions").
+	sbAdd := sqlbuilder.InsertInto(`"transaction"`).
 		Cols("order_number", "user_id", "income", "sum", "created_at").
 		Values(dto.OrderNumber, dto.UserID, true, v, sqlbuilder.Raw("now()"))
 
@@ -124,7 +123,8 @@ func (r PostgresqlGophermartRepository) Income(ctx context.Context, dto mart.Wit
 }
 
 func (r PostgresqlGophermartRepository) Transactions(ctx context.Context, dto mart.TransactionRequest) ([]mart.Transaction, error) {
-	sb := sqlbuilder.Select("order_number", "user_id", "income", "sum", "created_at").From("transactions")
+	sb := sqlbuilder.Select("order_number", "user_id", "income", "sum", "created_at").
+		From(`"transaction"`)
 	sb.Where(sb.Equal("user_id", dto.UserID))
 
 	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
@@ -148,8 +148,8 @@ func (r PostgresqlGophermartRepository) Transactions(ctx context.Context, dto ma
 
 // OrderRepository
 func (r PostgresqlGophermartRepository) Create(ctx context.Context, dto mart.OrderCreateRequest) error {
-	sb := sqlbuilder.InsertInto("order").
-		Cols("number", "user_id", "create_at", "status", "sum").
+	sb := sqlbuilder.InsertInto(`"order"`).
+		Cols("number", "user_id", "created_at", "status", "sum").
 		Values(dto.Number, dto.UserID, sqlbuilder.Raw("now()"), mart.StatusNew, 0)
 
 	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
@@ -158,8 +158,11 @@ func (r PostgresqlGophermartRepository) Create(ctx context.Context, dto mart.Ord
 }
 
 func (r PostgresqlGophermartRepository) Update(ctx context.Context, dto mart.OrderUpdateRequest) error {
-	sb := sqlbuilder.Update("order")
-	sb.Set(fmt.Sprintf("status = %d", dto.Status))
+	sb := sqlbuilder.Update(`"order"`)
+	sb.Set(
+		sb.Equal("status", dto.Status),
+		sb.Equal("sum", dto.Accrual),
+	)
 
 	sb.Where(sb.Equal("number", dto.Number))
 
@@ -170,9 +173,13 @@ func (r PostgresqlGophermartRepository) Update(ctx context.Context, dto mart.Ord
 
 func (r PostgresqlGophermartRepository) List(ctx context.Context, dto mart.OrderListRequest) ([]mart.OrderInfo, error) {
 	sp := sqlbuilder.
-		Select("number", "create_at", "status", "sum").
-		From("order")
+		Select("number", "created_at", "status", "sum").
+		From(`"order"`)
 	sp.Where(sp.Equal("user_id", dto.UserID))
+
+	if len(dto.OrderNumber) > 0 {
+		sp.Where(sp.Equal("number", dto.OrderNumber))
+	}
 
 	txt, args := sp.BuildWithFlavor(sqlbuilder.PostgreSQL)
 	rows, err := r.db.QueryContext(ctx, txt, args...)

@@ -120,19 +120,19 @@ func main() {
 	mux.Method(http.MethodPost, "/api/user/login", ctrl.UserLogin())
 
 	mux.Route("/api/user/orders", func(r chi.Router) {
-		r.Use(_middleware.GzMW)
+		r.Use(_middleware.JWTMiddleware(authSvc))
 		r.Method(http.MethodPost, "/", ctrl.RelateOrderWithUser())
 		r.Method(http.MethodGet, "/", ctrl.ListOrdersRelatedWithUser())
 	})
 
 	mux.Route("/api/user/balance", func(r chi.Router) {
-		r.Use(_middleware.GzMW)
+		r.Use(_middleware.JWTMiddleware(authSvc))
 		r.Method(http.MethodGet, "/", ctrl.BalanceStateByUser())
 		r.Method(http.MethodPost, "/withdraw", ctrl.Withdraw())
 	})
 
 	mux.Route("/api/user/withdrawals", func(r chi.Router) {
-		r.Use(_middleware.GzMW)
+		r.Use(_middleware.JWTMiddleware(authSvc))
 		r.Method(http.MethodGet, "/", ctrl.ListOfWithdrawals())
 	})
 

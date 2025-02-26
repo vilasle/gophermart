@@ -32,7 +32,7 @@ func (r PostgresqlGophermartRepository) createOrderTable() error {
 			id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY, 
 			number VARCHAR(255) NOT NULL UNIQUE,
 			user_id UUID NOT NULL,
-			create_at TIMESTAMP NOT NULL,
+			created_at TIMESTAMP NOT NULL,
 			status SMALLINT NOT NULL,
 			sum REAL NOT NULL,
 			FOREIGN KEY (user_id) REFERENCES "user" (id)
@@ -51,7 +51,7 @@ func (r PostgresqlGophermartRepository) createTransactionTable() error {
 			user_id UUID NOT NULL,
 			income BOOLEAN NOT NULL,
 			sum REAL NOT NULL,
-			create_at TIMESTAMP NOT NULL,
+			created_at TIMESTAMP NOT NULL,
 			FOREIGN KEY (user_id) REFERENCES "user" (id)
 		);
 		CREATE INDEX IF NOT EXISTS "transaction_user_id_idx" ON "transaction" (user_id);

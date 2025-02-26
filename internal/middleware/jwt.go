@@ -46,6 +46,7 @@ func JWTMiddleware(some ...service.AuthorizationService) func(http.Handler) http
 			// ИЗВЛЕКАЮ userID
 			// создаём экземпляр структуры с утверждениями
 			claims := &JWTClaims{}
+			
 			// парсим из строки токена tokenString в структуру claims
 			token, err := jwt.ParseWithClaims(tokenString.Value, claims, func(t *jwt.Token) (interface{}, error) {
 				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {

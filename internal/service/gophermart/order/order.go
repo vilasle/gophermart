@@ -2,6 +2,7 @@ package order
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/vilasle/gophermart/internal/logger"
@@ -92,6 +93,11 @@ func (s OrderService) List(ctx context.Context, dto service.ListOrderRequest) ([
 			CreatedAt: order.CreatedAt,
 		}
 	}
+
+	sort.Slice(orders, func(i, j int) bool {
+		return orders[i].CreatedAt.Before(orders[j].CreatedAt)
+	})
+
 	return orders, nil
 }
 
@@ -134,6 +140,7 @@ func (s OrderService) runChecker(ctx context.Context, job checkJob) {
 			UserID: job.userID,
 			Number: job.number,
 			Status: status,
+			Accrual: result.Accrual,
 		}
 
 		if err := s.rep.Update(ctx, upDtp); err != nil {
