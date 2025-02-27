@@ -74,7 +74,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	accrualUrl, err := url.Parse(args.accrualAddr)
+	accrualURL, err := url.Parse(args.accrualAddr)
 	if err != nil {
 		logger.Error("can not parse accrual endpoint address", "error", err)
 		os.Exit(1)
@@ -100,7 +100,7 @@ func main() {
 	authSvc := authorization.NewAuthorizationService(dbRep)
 
 	accrualSvc := accrual.NewAccrualService(
-		httpRep.NewAccrualRepository(accrualUrl),
+		httpRep.NewAccrualRepository(accrualURL),
 	)
 
 	orderSvc := order.NewOrderService(dbRep, accrualSvc, dbRep)
