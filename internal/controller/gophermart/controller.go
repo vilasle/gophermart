@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/golang-jwt/jwt/v4"
 
 	"github.com/vilasle/gophermart/internal/controller"
@@ -72,12 +71,7 @@ type Controller struct {
 // POST /api/user/register
 func (c Controller) UserRegister() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		reqID := r.Context().Value(middleware.RequestIDKey)
-		if reqID == nil {
-			reqID = ""
-		}
-
-		log := logger.With("id", reqID.(string))
+		log := logger.GetRequestLogger(r)
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
@@ -126,12 +120,7 @@ func (c Controller) UserRegister() controller.ControllerHandler {
 // POST /api/user/login
 func (c Controller) UserLogin() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		reqID := r.Context().Value(middleware.RequestIDKey)
-		if reqID == nil {
-			reqID = ""
-		}
-
-		log := logger.With("id", reqID.(string))
+		log := logger.GetRequestLogger(r)
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
@@ -176,12 +165,7 @@ func (c Controller) UserLogin() controller.ControllerHandler {
 // POST /api/user/orders
 func (c Controller) RelateOrderWithUser() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		reqID := r.Context().Value(middleware.RequestIDKey)
-		if reqID == nil {
-			reqID = ""
-		}
-
-		log := logger.With("id", reqID.(string))
+		log := logger.GetRequestLogger(r)
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
@@ -227,12 +211,7 @@ func (c Controller) ListOrdersRelatedWithUser() controller.ControllerHandler {
 // GET /api/user/balance
 func (c Controller) BalanceStateByUser() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		reqID := r.Context().Value(middleware.RequestIDKey)
-		if reqID == nil {
-			reqID = ""
-		}
-
-		log := logger.With("id", reqID.(string))
+		log := logger.GetRequestLogger(r)
 
 		// get userID from jwt context (by the key) to get order list related with a specific user
 		userID, ok := r.Context().Value(_mdw.UserIDKey).(string)
@@ -256,12 +235,7 @@ func (c Controller) BalanceStateByUser() controller.ControllerHandler {
 // POST /api/user/balance/withdraw
 func (c Controller) Withdraw() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		reqID := r.Context().Value(middleware.RequestIDKey)
-		if reqID == nil {
-			reqID = ""
-		}
-
-		log := logger.With("id", reqID.(string))
+		log := logger.GetRequestLogger(r)
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
@@ -305,12 +279,7 @@ func (c Controller) Withdraw() controller.ControllerHandler {
 // GET /api/user/withdrawals (AUTH only)
 func (c Controller) ListOfWithdrawals() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		reqID := r.Context().Value(middleware.RequestIDKey)
-		if reqID == nil {
-			reqID = ""
-		}
-
-		log := logger.With("id", reqID.(string))
+		log := logger.GetRequestLogger(r)
 
 		// get userID from jwt context (by the key) to get order list related with a specific user
 		userID, ok := r.Context().Value(_mdw.UserIDKey).(string)

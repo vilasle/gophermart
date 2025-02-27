@@ -6,22 +6,17 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/vilasle/gophermart/internal/controller"
 	"github.com/vilasle/gophermart/internal/logger"
 	"github.com/vilasle/gophermart/internal/service"
 )
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// AccrualsInf is used as a proxy struct to unmarshal response body in GET /api/orders/{number}
-type AccrualsInf struct {
+type AccrualsInfo struct {
 	OrderNumber string  `json:"order"`
 	Status      string  `json:"status"`
 	Accrual     float64 `json:"accrual,omitempty"` // TODO: omitempty is it ok?
 }
 
-// RegisterCalculationRequest is used to unmarshal data in POST /api/orders
 type RegisterCalculationReq struct { // TODO: mb use lower case?
 	OrderNumber string     `json:"order"`
 	Products    []ProductR `json:"goods"`
@@ -49,14 +44,13 @@ type Controller struct {
 // GET /api/orders/{number}
 func (c Controller) OrderInfo() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		reqID := r.Context().Value(middleware.RequestIDKey)
-		if reqID == nil {
-			reqID = ""
-		}
+		var (
+			calc   service.CalculationInfo
+			err    error
+			number = chi.URLParam(r, "number")
+		)
 
-		log := logger.With("id", reqID.(string))
-
-		number := chi.URLParam(r, "number")
+		log := logger.GetRequestLogger(r)
 
 		if number == "" {
 			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
@@ -64,35 +58,26 @@ func (c Controller) OrderInfo() controller.ControllerHandler {
 
 		log.Debug("getting order info", "number", number)
 
-		calc, err := c.Calculation(r.Context(), service.CalculationFilterRequest{
-			OrderNumber: number,
-		})
+		dto := service.CalculationFilterRequest{OrderNumber: number}
 
-		if err != nil {
+		if calc, err = c.Calculation(r.Context(), dto); err != nil {
 			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 
-		info := AccrualsInf{
+		log.Debug("order calculation", "info", calc)
+
+		return controller.NewResponse(nil, AccrualsInfo{
 			OrderNumber: calc.OrderNumber,
 			Status:      calc.Status,
 			Accrual:     calc.Accrual,
-		}
-
-		log.Debug("order info", "info", info)
-
-		return controller.NewResponse(nil, info, controller.TypeJSON, 0)
+		}, controller.TypeJSON, 0)
 	}
 }
 
 // POST /api/orders
 func (c Controller) RegisterOrder() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		reqID := r.Context().Value(middleware.RequestIDKey)
-		if reqID == nil {
-			reqID = ""
-		}
-
-		log := logger.With("id", reqID.(string))
+		log := logger.GetRequestLogger(r)
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
@@ -100,8 +85,9 @@ func (c Controller) RegisterOrder() controller.ControllerHandler {
 
 			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
+
 		log.Info("register order", "body", string(body))
-		
+
 		regReq := RegisterCalculationReq{}
 
 		err = json.Unmarshal(body, &regReq)
@@ -129,12 +115,7 @@ func (c Controller) RegisterOrder() controller.ControllerHandler {
 // POST /api/goods
 func (c Controller) AddCalculationRules() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		reqID := r.Context().Value(middleware.RequestIDKey)
-		if reqID == nil {
-			reqID = ""
-		}
-
-		log := logger.With("id", reqID.(string))
+		log := logger.GetRequestLogger(r)
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
@@ -142,7 +123,6 @@ func (c Controller) AddCalculationRules() controller.ControllerHandler {
 			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
 		log.Info("adding rules", "body", string(body))
-		
 
 		prRegCalcRule := RegisterCalculationRuleReq{}
 		err = json.Unmarshal(body, &prRegCalcRule)
