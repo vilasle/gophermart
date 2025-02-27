@@ -152,6 +152,8 @@ func (c CalculationService) calculateOrder(ctx context.Context, event Event) {
 
 	resultDto := c.fillCalculatedDto(number, bonus)
 
+	logger.Debug("update calculation dto", "dto", resultDto)
+
 	if err := c.repCalc.UpdateCalculationResult(ctx, resultDto); err != nil {
 		logger.Error("saving calculation result", "error", err, "data", dto)
 		return
