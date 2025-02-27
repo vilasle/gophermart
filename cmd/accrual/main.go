@@ -22,6 +22,33 @@ import (
 	"github.com/vilasle/gophermart/internal/service/calculation"
 )
 
+type cliArgs struct {
+	addr  string
+	dbURI string
+	debug bool
+}
+
+func initCli() cliArgs {
+	args := cliArgs{}
+	pflag.StringVarP(&args.addr, "address", "a", ":8080", "address to listen on")
+	pflag.StringVarP(&args.dbURI, "database", "d", "", "database url e.g postgres://postgres:postgres@localhost:5432/postgres")
+	pflag.BoolVarP(&args.debug, "debug", "D", false, "enable debug message")
+	pflag.Parse()
+
+	args.addr = getEnv("RUN_ADDRESS", args.addr)
+	args.dbURI = getEnv("DATABASE_URI", args.dbURI)
+
+	return args
+}
+
+func getEnv(key, fallback string) string {
+	result := fallback
+	if value, _ := os.LookupEnv(key); value != "" {
+		result = value
+	}
+	return result
+}
+
 func main() {
 	args := initCli()
 
@@ -58,36 +85,10 @@ func main() {
 
 	s := signalSubscription()
 
+	logger.Info("run server", "addr", args.addr)
 	go run(server, s)
 
 	<-s
-}
-
-type cliArgs struct {
-	addr  string
-	dbURI string
-	debug bool
-}
-
-func initCli() cliArgs {
-	args := cliArgs{}
-	pflag.StringVarP(&args.addr, "address", "a", ":8080", "address to listen on")
-	pflag.StringVarP(&args.dbURI, "database", "d", "", "database url e.g postgres://postgres:postgres@localhost:5432/postgres")
-	pflag.BoolVarP(&args.debug, "debug", "D", false, "enable debug message")
-	pflag.Parse()
-
-	args.addr = getEnv("RUN_ADDRESS", args.addr)
-	args.dbURI = getEnv("DATABASE_URI", args.dbURI)
-
-	return args
-}
-
-func getEnv(key, fallback string) string {
-	result := fallback
-	if value, _ := os.LookupEnv(key); value != "" {
-		result = value
-	}
-	return result
 }
 
 func initLogger(args cliArgs) {

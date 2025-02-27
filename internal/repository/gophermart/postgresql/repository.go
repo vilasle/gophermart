@@ -18,8 +18,8 @@ type PostgresqlGophermartRepository struct {
 	db *sql.DB
 }
 
-func NewPostgresqlGophermartRepository(db *sql.DB) (*PostgresqlGophermartRepository, error) {
-	r := &PostgresqlGophermartRepository{db: db}
+func NewPostgresqlGophermartRepository(db *sql.DB) (PostgresqlGophermartRepository, error) {
+	r := PostgresqlGophermartRepository{db: db}
 	return r, r.createSchema()
 }
 
@@ -179,7 +179,7 @@ func (r PostgresqlGophermartRepository) List(ctx context.Context, dto mart.Order
 	sp := sqlbuilder.
 		Select("user_id", "number", "created_at", "status", "sum").
 		From(`"order"`)
-	
+
 	if len(dto.OrderNumber) > 0 {
 		sp.Where(sp.Equal("number", dto.OrderNumber))
 	}

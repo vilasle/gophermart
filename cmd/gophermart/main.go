@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -62,14 +61,10 @@ func getEnv(key, fallback string) string {
 func main() {
 	args := initCli()
 
-	// if args.debug {
-	logger.Init(os.Stdout, logger.DebugLevel)
-	// } else {
-	// 	logger.Init(os.Stdout, logger.InfoLevel)
-	// }
+	initLogger(args)
 
-	if args.dbURI == "" {
-		logger.Error("database url is required")
+	if err := checkArgs(args); err != nil {
+		logger.Error("invalid arguments", "error", err)
 		pflag.Usage()
 		os.Exit(1)
 	}
@@ -79,8 +74,6 @@ func main() {
 		logger.Error("can not parse accrual endpoint address", "error", err)
 		os.Exit(1)
 	}
-
-	ctx := context.Background()
 
 	db, err := sql.Open("pgx", args.dbURI)
 	if err != nil {
@@ -95,22 +88,64 @@ func main() {
 		os.Exit(1)
 	}
 
-	withdrawalSvc := withdrawal.NewWithdrawalService(dbRep)
+	ctrl := newController(dbRep, accrualURL)
 
-	authSvc := authorization.NewAuthorizationService(dbRep)
+	mux := newMux(ctrl)
+
+	server := newServer(mux, args.addr)
+	defer server.Close()
+
+	s := signalSubscription()
+	logger.Info("run server", "addr", args.addr)
+	go run(server, s)
+
+	<-s
+}
+
+func initLogger(args cliArgs) {
+	if args.debug {
+		logger.Init(os.Stdout, logger.DebugLevel)
+	} else {
+		logger.Init(os.Stdout, logger.InfoLevel)
+	}
+}
+
+func checkArgs(args cliArgs) error {
+	errs := make([]error, 3)
+	if args.dbURI == "" {
+		errs = append(errs, errors.New("database url is required"))
+	}
+
+	if args.addr == "" {
+		errs = append(errs, errors.New("address is required"))
+	}
+
+	if args.accrualAddr == "" {
+		errs = append(errs, errors.New("accrual endpoint is required"))
+	}
+
+	return errors.Join(errs...)
+}
+
+func newController(pgRepository pgRep.PostgresqlGophermartRepository, accrualURL *url.URL) gophermart.Controller {
+	withdrawalSvc := withdrawal.NewWithdrawalService(pgRepository)
+
+	authSvc := authorization.NewAuthorizationService(pgRepository)
 
 	accrualSvc := accrual.NewAccrualService(
 		httpRep.NewAccrualRepository(accrualURL),
 	)
 
-	orderSvc := order.NewOrderService(dbRep, accrualSvc, dbRep)
+	orderSvc := order.NewOrderService(pgRepository, accrualSvc, pgRepository)
 
-	ctrl := gophermart.Controller{
+	return gophermart.Controller{
 		AuthSvc:     authSvc,
 		OrderSvc:    orderSvc,
 		WithdrawSvc: withdrawalSvc,
 	}
+}
 
+func newMux(ctrl gophermart.Controller) *chi.Mux {
 	mux := chi.NewMux()
 
 	mux.Use(middleware.RequestID)
@@ -121,46 +156,49 @@ func main() {
 	mux.Method(http.MethodPost, "/api/user/login", ctrl.UserLogin())
 
 	mux.Route("/api/user/orders", func(r chi.Router) {
-		r.Use(_middleware.JWTMiddleware(authSvc))
+		r.Use(_middleware.JWTMiddleware(ctrl.AuthSvc))
 		r.Method(http.MethodPost, "/", ctrl.RelateOrderWithUser())
 		r.Method(http.MethodGet, "/", ctrl.ListOrdersRelatedWithUser())
 	})
 
 	mux.Route("/api/user/balance", func(r chi.Router) {
-		r.Use(_middleware.JWTMiddleware(authSvc))
+		r.Use(_middleware.JWTMiddleware(ctrl.AuthSvc))
 		r.Method(http.MethodGet, "/", ctrl.BalanceStateByUser())
 		r.Method(http.MethodPost, "/withdraw", ctrl.Withdraw())
 	})
 
 	mux.Route("/api/user/withdrawals", func(r chi.Router) {
-		r.Use(_middleware.JWTMiddleware(authSvc))
+		r.Use(_middleware.JWTMiddleware(ctrl.AuthSvc))
 		r.Method(http.MethodGet, "/", ctrl.ListOfWithdrawals())
 	})
 
-	server := http.Server{
-		Addr:         args.addr,
+	return mux
+}
+
+func newServer(mux *chi.Mux, addr string) *http.Server {
+	return &http.Server{
+		Addr:         addr,
 		ReadTimeout:  time.Second * 10,
 		WriteTimeout: time.Second * 10,
 		IdleTimeout:  time.Second * 60,
 		Handler:      mux,
 	}
+}
 
-	sigint := make(chan os.Signal, 1)
-	signal.Notify(sigint, os.Interrupt)
-
-	go func() {
-		logger.Info("starting server", "address", args.addr)
-		if err := server.ListenAndServe(); err != nil {
-			if errors.Is(err, http.ErrServerClosed) {
-				logger.Info("server stopped")
-			} else {
-				logger.Error("starting failed", "error", err)
-			}
+func run(server *http.Server, sigint chan os.Signal) {
+	if err := server.ListenAndServe(); err != nil {
+		if errors.Is(err, http.ErrServerClosed) {
+			logger.Info("server stopped")
+		} else {
+			logger.Error("starting failed", "error", err)
 		}
-		sigint <- os.Interrupt
-	}()
+	}
+	sigint <- os.Interrupt
 
-	<-sigint
-	server.Shutdown(ctx)
+}
 
+func signalSubscription() chan os.Signal {
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, os.Interrupt)
+	return s
 }
