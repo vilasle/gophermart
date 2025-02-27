@@ -3,6 +3,7 @@ package withdrawal
 import (
 	"context"
 	"errors"
+	"math"
 	"sort"
 	"strconv"
 
@@ -63,7 +64,7 @@ func (s WithdrawalService) List(ctx context.Context, dto service.WithdrawalListR
 
 		result = append(result, service.WithdrawalInfo{
 			OrderNumber: h.OrderNumber,
-			Sum:         h.Sum,
+			Sum:         math.Round(h.Sum*100) / 100,
 			CreatedAt:   h.CreatedAt,
 		})
 	}
@@ -92,6 +93,10 @@ func (s WithdrawalService) Balance(ctx context.Context, dto service.UserBalanceR
 			balance.Withdrawn += h.Sum
 		}
 	}
-	balance.Current -= balance.Withdrawn
+	balance.Current += balance.Withdrawn
+
+	balance.Current = math.Round(balance.Current*100) / 100
+	balance.Withdrawn = math.Round(balance.Withdrawn*100) / 100
+
 	return balance, nil
 }

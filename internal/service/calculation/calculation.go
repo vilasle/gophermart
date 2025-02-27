@@ -104,7 +104,7 @@ func (c CalculationService) fillCalculatedInfo(dto repository.CalculationInfo) s
 	return service.CalculationInfo{
 		OrderNumber: dto.OrderNumber,
 		Status:      c.statusView(dto.Status),
-		Accrual:     dto.Value,
+		Accrual:     math.Round(dto.Value*100)/100,
 	}
 }
 
