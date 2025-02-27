@@ -127,6 +127,11 @@ func getErrorCode(err error) int {
 	if errors.Is(err, service.StatusOrderSuccessfullyAccepted) { // for POST /api/orders in accrual (status 202)
 		return http.StatusAccepted
 	}
+
+	if errors.Is(err, service.ErrNotEnoughPoints) { // for POST /api/orders in accrual (status 202)
+		return http.StatusPaymentRequired
+	}
+
 	if errors.Is(err, service.ErrDuplicate) {
 		return http.StatusConflict // 409 - логин уже занят
 	}

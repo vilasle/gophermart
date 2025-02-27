@@ -13,6 +13,11 @@ import (
 const tokenExp = time.Hour * 1
 const secretKey = "supersecretkey"
 
+type contextKey string
+
+const UserIDKey contextKey = "userID"
+const CookieKey string = "token"
+
 // ///////////////////////////// MODELS //////////////////////////////////////////////////////
 // Claims — структура утверждений, которая включает стандартные утверждения и
 // одно пользовательское UserID
@@ -32,7 +37,7 @@ func JWTMiddleware(some ...service.AuthorizationService) func(http.Handler) http
 		return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 			fmt.Println("JWT MW Is available!")
 			// get token string from the cookies
-			tokenString, err := req.Cookie("token")
+			tokenString, err := req.Cookie(CookieKey)
 			// check it
 			if err != nil {
 				res.WriteHeader(http.StatusUnauthorized)
@@ -92,7 +97,7 @@ func JWTMiddleware(some ...service.AuthorizationService) func(http.Handler) http
 			})
 
 			// add userID to context to use it in controller
-			ctx := context.WithValue(req.Context(), "userID", claims.UserID)
+			ctx := context.WithValue(req.Context(), UserIDKey, claims.UserID)
 			// expiration date - OK - continue
 			next.ServeHTTP(res, req.WithContext(ctx)) // continue
 

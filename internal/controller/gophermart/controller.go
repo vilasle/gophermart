@@ -9,6 +9,7 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 
 	"github.com/vilasle/gophermart/internal/controller"
+	"github.com/vilasle/gophermart/internal/middleware"
 	"github.com/vilasle/gophermart/internal/service"
 )
 
@@ -44,7 +45,7 @@ type UserBal struct {
 }
 
 // WithdrawalInf is used as a proxy struct to marshal response body in GET /api/user/withdrawals
-type WithdrawalInf struct {
+type WithdrawalInfo struct {
 	OrderNumber string  `json:"order"`
 	Sum         float64 `json:"sum"`
 	Status      string  `json:"processed_at"`
@@ -101,7 +102,7 @@ func (c Controller) UserRegister() controller.ControllerHandler {
 
 		// generate response (set cookie) and response
 		return controller.NewResponse(nil, nil, controller.TypeText, http.Cookie{
-			Name:     "token",
+			Name:     middleware.CookieKey,
 			Value:    tokenStr,
 			Secure:   false,
 			HttpOnly: true,
@@ -143,7 +144,7 @@ func (c Controller) UserLogin() controller.ControllerHandler {
 		}
 		// set cookie to mold the response
 		return controller.NewResponse(nil, nil, controller.TypeText, http.Cookie{
-			Name:     "token",
+			Name:     middleware.CookieKey,
 			Value:    tokenStr,
 			Secure:   false,
 			HttpOnly: true,
@@ -160,7 +161,7 @@ func (c Controller) RelateOrderWithUser() controller.ControllerHandler {
 			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
 
-		userId, ok := r.Context().Value("userID").(string)
+		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
 		if !ok {
 			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText)
 		}
@@ -168,7 +169,7 @@ func (c Controller) RelateOrderWithUser() controller.ControllerHandler {
 		// move the string(body) into the func in service to check order number (LUNA) and save it
 		err = c.OrderSvc.Register(r.Context(), service.RegisterOrderRequest{
 			Number: string(body),
-			UserID: userId,
+			UserID: userID,
 		})
 
 		return controller.NewResponse(err, nil, controller.TypeText)
@@ -180,8 +181,12 @@ func (c Controller) RelateOrderWithUser() controller.ControllerHandler {
 func (c Controller) ListOrdersRelatedWithUser() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		// get userID from jwt context (by the key) to get order list related with a specific user
-		userID := r.Context().Value("userID")
-		orderInfo, err := c.OrderSvc.List(r.Context(), service.ListOrderRequest{UserID: userID.(string)})
+		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+		if !ok {
+			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText)
+		}
+
+		orderInfo, err := c.OrderSvc.List(r.Context(), service.ListOrderRequest{UserID: userID})
 		if err != nil {
 			return controller.NewResponse(err, nil, controller.TypeText)
 		}
@@ -195,8 +200,12 @@ func (c Controller) ListOrdersRelatedWithUser() controller.ControllerHandler {
 func (c Controller) BalanceStateByUser() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		// get userID from jwt context (by the key) to get order list related with a specific user
-		userID := r.Context().Value("userID")
-		balanceInfo, err := c.WithdrawSvc.Balance(r.Context(), service.UserBalanceRequest{UserID: userID.(string)})
+		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+		if !ok {
+			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText)
+		}
+
+		balanceInfo, err := c.WithdrawSvc.Balance(r.Context(), service.UserBalanceRequest{UserID: userID})
 		if err != nil {
 			return controller.NewResponse(err, nil, controller.TypeText)
 		}
@@ -215,22 +224,30 @@ func (c Controller) Withdraw() controller.ControllerHandler {
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
 			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
 		}
+
+		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+		if !ok {
+			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText)
+		}
+
 		// proxy struct to unmarshal OrderNumber & Sum
-		type ProductRow struct {
+		inputBody := struct {
 			Order string  `json:"order"`
 			Sum   float64 `json:"sum"`
-		}
-		withdrawalReq := ProductRow{}
-		//unmarshalling
-		err = json.Unmarshal(body, &withdrawalReq)
+		}{}
+
+		err = json.Unmarshal(body, &inputBody)
 		if err != nil {
 			return controller.NewResponse(err, nil, controller.TypeText)
 		}
 
-		// get userID from jwt context (by the key) to get order list related with a specific user
-		userID := r.Context().Value("userID")
+		err = c.WithdrawSvc.Withdraw(
+			r.Context(), service.WithdrawalRequest{
+				UserID:      userID,
+				OrderNumber: inputBody.Order,
+				Sum:         inputBody.Sum,
+			})
 
-		err = c.WithdrawSvc.Withdraw(r.Context(), service.WithdrawalRequest{UserID: userID.(string), OrderNumber: withdrawalReq.Order, Sum: withdrawalReq.Sum})
 		return controller.NewResponse(err, nil, controller.TypeText)
 	}
 }
@@ -239,18 +256,18 @@ func (c Controller) Withdraw() controller.ControllerHandler {
 func (c Controller) ListOfWithdrawals() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		// get userID from jwt context (by the key) to get order list related with a specific user
-		userID := r.Context().Value("userID")
+		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+		if !ok {
+			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText)
+		}
 
-		withdrawalInfo, err := c.WithdrawSvc.List(r.Context(), service.WithdrawalListRequest{UserID: userID.(string)})
+		withdrawalInfo, err := c.WithdrawSvc.List(r.Context(), service.WithdrawalListRequest{UserID: userID})
 		if err != nil {
 			return controller.NewResponse(err, nil, controller.TypeText)
 		}
-		// create&fill the proxy struct to marshal data in response
-		withdrawList := make([]WithdrawalInf, 0, len(withdrawalInfo))
-		for _, v := range withdrawalInfo {
-			ent := WithdrawalInf{OrderNumber: v.OrderNumber, Sum: v.Sum, Status: v.CreatedAt.Format(time.RFC3339)}
-			withdrawList = append(withdrawList, ent)
-		}
+
+		withdrawList := fillListOfWithdrawals(withdrawalInfo)
+
 		return controller.NewResponse(nil, withdrawList, controller.TypeJson)
 	}
 }
@@ -265,18 +282,10 @@ func genJWTTokenString(userID string) (string, error) {
 			// set expiration time
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(TokenExp)),
 		},
-		// set my own statement
+
 		UserID: userID,
 	})
-
-	// создаём строку токена с подписью
-	tokenString, err := token.SignedString([]byte(secretKey))
-	if err != nil {
-		return "", err
-	}
-	// возвращаем строку токена
-	return tokenString, nil
-
+	return token.SignedString([]byte(secretKey))
 }
 
 func fillListOfOrders(orderInfo []service.OrderInfo) []OrderInfo {
@@ -291,4 +300,20 @@ func fillListOfOrders(orderInfo []service.OrderInfo) []OrderInfo {
 		orders = append(orders, order)
 	}
 	return orders
+}
+
+func fillListOfWithdrawals(withdrawalInfo []service.WithdrawalInfo) []WithdrawalInfo {
+	withdrawList := make([]WithdrawalInfo, 0, len(withdrawalInfo))
+	for _, v := range withdrawalInfo {
+		s := v.Sum
+		if s < 0 {
+			s = -s
+		}
+		withdrawList = append(withdrawList, WithdrawalInfo{
+			OrderNumber: v.OrderNumber,
+			Sum:         s,
+			Status:      v.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	return withdrawList
 }

@@ -3,6 +3,7 @@ package withdrawal
 import (
 	"context"
 	"errors"
+	"sort"
 
 	"github.com/vilasle/gophermart/internal/repository/gophermart"
 	"github.com/vilasle/gophermart/internal/service"
@@ -54,6 +55,10 @@ func (s WithdrawalService) List(ctx context.Context, dto service.WithdrawalListR
 			CreatedAt:   h.CreatedAt,
 		})
 	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.Before(result[j].CreatedAt)
+	})
+
 	return result, nil
 }
 
@@ -61,7 +66,7 @@ func (s WithdrawalService) Balance(ctx context.Context, dto service.UserBalanceR
 	if dto.UserID == "" {
 		return service.UserBalance{}, service.ErrInvalidFormat
 	}
-	
+
 	r, err := s.rep.Transactions(ctx, gophermart.TransactionRequest{UserID: dto.UserID})
 	if err != nil {
 		return service.UserBalance{}, err
