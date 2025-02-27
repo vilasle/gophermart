@@ -22,6 +22,47 @@ import (
 	"github.com/vilasle/gophermart/internal/service/calculation"
 )
 
+func main() {
+	args := initCli()
+
+	initLogger(args)
+
+	if err := checkArgs(args); err != nil {
+		logger.Error("invalid arguments", "error", err)
+		pflag.Usage()
+		os.Exit(1)
+	}
+
+	db, err := sql.Open("pgx", args.dbURI)
+	if err != nil {
+		logger.Error("connecting to database failed", "url", args.dbURI, "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	repository, err := cRep.NewCalculationRepository(db)
+	if err != nil {
+		logger.Error("can not init calculation repository", "error", err)
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+
+	em := calculation.NewEventManager(ctx)
+	defer em.Stop()
+
+	mux := newMux(newController(repository, em))
+
+	server := newServer(mux, args.addr)
+	defer server.Close()
+
+	s := signalSubscription()
+
+	go run(server, s)
+
+	<-s
+}
+
 type cliArgs struct {
 	addr  string
 	dbURI string
@@ -49,54 +90,45 @@ func getEnv(key, fallback string) string {
 	return result
 }
 
-func main() {
-	args := initCli()
+func initLogger(args cliArgs) {
+	if args.debug {
+		logger.Init(os.Stdout, logger.DebugLevel)
+	} else {
+		logger.Init(os.Stdout, logger.InfoLevel)
+	}
+}
 
-	// if args.debug {
-	logger.Init(os.Stdout, logger.DebugLevel)
-	// } else {
-	// 	logger.Init(os.Stdout, logger.InfoLevel)
-	// }
-
+func checkArgs(args cliArgs) error {
+	errs := make([]error, 2)
 	if args.dbURI == "" {
-		logger.Error("database url is required")
-		pflag.Usage()
-		os.Exit(1)
+		errs = append(errs, errors.New("database url is required"))
 	}
 
-	ctx := context.Background()
-
-	em := calculation.NewEventManager(ctx)
-
-	db, err := sql.Open("pgx", args.dbURI)
-	if err != nil {
-		logger.Error("connecting to database failed", "url", args.dbURI, "error", err)
-		os.Exit(1)
+	if args.addr == "" {
+		errs = append(errs, errors.New("address is required"))
 	}
-	defer db.Close()
+	return errors.Join(errs...)
+}
 
-	repCalc, err := cRep.NewCalculationRepository(db)
-	if err != nil {
-		logger.Error("can not init calculation repository", "error", err)
-		os.Exit(1)
-	}
-
+func newController(repository cRep.CalculationRepository, eventManager *calculation.EventManager) accrual.Controller {
 	ruleSvc := calculation.NewRuleService(calculation.RuleServiceConfig{
-		Repository:   repCalc,
-		EventManager: em,
+		Repository:   repository,
+		EventManager: eventManager,
 	})
 
 	calcSvc := calculation.NewCalculationService(calculation.CalculationServiceConfig{
-		CalculationRepository: repCalc,
-		CalculationRules:      repCalc,
-		EventManager:          em,
+		CalculationRepository: repository,
+		CalculationRules:      repository,
+		EventManager:          eventManager,
 	})
 
-	ctrl := accrual.Controller{
+	return accrual.Controller{
 		CalculationService:     calcSvc,
 		CalculationRuleService: ruleSvc,
 	}
+}
 
+func newMux(ctrl accrual.Controller) *chi.Mux {
 	mux := chi.NewMux()
 
 	mux.Use(middleware.RequestID)
@@ -108,29 +140,33 @@ func main() {
 	mux.Method(http.MethodPost, "/api/orders", ctrl.RegisterOrder())
 	mux.Method(http.MethodPost, "/api/goods", ctrl.AddCalculationRules())
 
-	server := http.Server{
-		Addr:         args.addr,
+	return mux
+}
+
+func newServer(mux *chi.Mux, addr string) *http.Server {
+	return &http.Server{
+		Addr:         addr,
 		ReadTimeout:  time.Second * 10,
 		WriteTimeout: time.Second * 10,
 		IdleTimeout:  time.Second * 60,
 		Handler:      mux,
 	}
+}
 
-	sigint := make(chan os.Signal, 1)
-	signal.Notify(sigint, os.Interrupt)
-
-	go func() {
-		if err := server.ListenAndServe(); err != nil {
-			if errors.Is(err, http.ErrServerClosed) {
-				logger.Info("server stopped")
-			} else {
-				logger.Error("starting failed", "error", err)
-			}
+func run(server *http.Server, sigint chan os.Signal) {
+	if err := server.ListenAndServe(); err != nil {
+		if errors.Is(err, http.ErrServerClosed) {
+			logger.Info("server stopped")
+		} else {
+			logger.Error("starting failed", "error", err)
 		}
-		sigint <- os.Interrupt
-	}()
+	}
+	sigint <- os.Interrupt
 
-	<-sigint
-	server.Shutdown(ctx)
+}
 
+func signalSubscription() chan os.Signal {
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, os.Interrupt)
+	return s
 }
