@@ -152,9 +152,10 @@ func main() {
 		logger.Info("starting server", "address", args.addr)
 		if err := server.ListenAndServe(); err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
-				logger.Info("starting stopped")
+				logger.Info("server stopped")
+			} else {
+				logger.Error("starting failed", "error", err)
 			}
-			logger.Error("starting failed", "error", err)
 		}
 		sigint <- os.Interrupt
 	}()

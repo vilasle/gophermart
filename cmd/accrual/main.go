@@ -104,6 +104,7 @@ func main() {
 	mux.Use(middleware.Recoverer)
 
 	mux.Method(http.MethodGet, "/api/orders/{number}", ctrl.OrderInfo())
+	mux.Method(http.MethodGet, "/orders/{number}", ctrl.OrderInfo())
 	mux.Method(http.MethodPost, "/api/orders", ctrl.RegisterOrder())
 	mux.Method(http.MethodPost, "/api/goods", ctrl.AddCalculationRules())
 
@@ -121,9 +122,10 @@ func main() {
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
-				logger.Info("starting stopped")
+				logger.Info("server stopped")
+			} else {
+				logger.Error("starting failed", "error", err)
 			}
-			logger.Error("starting failed", "error", err)
 		}
 		sigint <- os.Interrupt
 	}()
