@@ -2,6 +2,8 @@ module github.com/vilasle/gophermart
 
 go 1.23
 
+toolchain go1.23.4
+
 require (
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/golang-jwt/jwt/v4 v4.5.1
