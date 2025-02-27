@@ -71,7 +71,7 @@ func (c Controller) UserRegister() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
-			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
 
 		// proxy struct to unmarshal
@@ -79,7 +79,7 @@ func (c Controller) UserRegister() controller.ControllerHandler {
 		// Unmarshal login and password
 		err = json.Unmarshal(body, &regReq)
 		if err != nil {
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 
 		// fill the acceptable struct for response
@@ -91,17 +91,17 @@ func (c Controller) UserRegister() controller.ControllerHandler {
 		// Передаю логин и пароль в сервис на проверку, получаем userID
 		userID, err := c.AuthSvc.Register(r.Context(), user) //
 		if err != nil {
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 
 		}
 		// Если всё ок, то производим генерацию токена и его запись в куки
 		tokenStr, err := genJWTTokenString(userID.ID)
 		if err != nil {
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 
 		// generate response (set cookie) and response
-		return controller.NewResponse(nil, nil, controller.TypeText, http.Cookie{
+		return controller.NewResponse(nil, nil, controller.TypeText, http.StatusOK, http.Cookie{
 			Name:     middleware.CookieKey,
 			Value:    tokenStr,
 			Secure:   false,
@@ -116,7 +116,7 @@ func (c Controller) UserLogin() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeJson)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeJson, 0)
 		}
 
 		// proxy struct to unmarshal
@@ -124,7 +124,7 @@ func (c Controller) UserLogin() controller.ControllerHandler {
 		// Unmarshal login and password
 		err = json.Unmarshal(body, &regReq)
 		if err != nil {
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 		// fill the acceptable struct for response
 		user := service.AuthorizeRequest{
@@ -135,15 +135,15 @@ func (c Controller) UserLogin() controller.ControllerHandler {
 		// Передаю логин и пароль в сервис на проверку
 		userInfo, err := c.AuthSvc.Authorize(r.Context(), user) //
 		if err != nil {
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 		// Если всё ок, то производим генерацию токена
 		tokenStr, err := genJWTTokenString(userInfo.ID)
 		if err != nil {
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 		// set cookie to mold the response
-		return controller.NewResponse(nil, nil, controller.TypeText, http.Cookie{
+		return controller.NewResponse(nil, nil, controller.TypeText, 0, http.Cookie{
 			Name:     middleware.CookieKey,
 			Value:    tokenStr,
 			Secure:   false,
@@ -158,12 +158,12 @@ func (c Controller) RelateOrderWithUser() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
 
 		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
 		if !ok {
-			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText)
+			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText, 0)
 		}
 
 		// move the string(body) into the func in service to check order number (LUNA) and save it
@@ -172,7 +172,7 @@ func (c Controller) RelateOrderWithUser() controller.ControllerHandler {
 			UserID: userID,
 		})
 
-		return controller.NewResponse(err, nil, controller.TypeText)
+		return controller.NewResponse(err, nil, controller.TypeText, http.StatusAccepted)
 	}
 
 }
@@ -183,16 +183,16 @@ func (c Controller) ListOrdersRelatedWithUser() controller.ControllerHandler {
 		// get userID from jwt context (by the key) to get order list related with a specific user
 		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
 		if !ok {
-			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText)
+			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText, 0)
 		}
 
 		orderInfo, err := c.OrderSvc.List(r.Context(), service.ListOrderRequest{UserID: userID})
 		if err != nil {
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 		//fill the proxy slice of structs (with struct tags) to marshal the response
 		orInfo := fillListOfOrders(orderInfo)
-		return controller.NewResponse(nil, orInfo, controller.TypeJson)
+		return controller.NewResponse(nil, orInfo, controller.TypeJson, 0)
 	}
 }
 
@@ -202,17 +202,17 @@ func (c Controller) BalanceStateByUser() controller.ControllerHandler {
 		// get userID from jwt context (by the key) to get order list related with a specific user
 		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
 		if !ok {
-			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText)
+			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText, 0)
 		}
 
 		balanceInfo, err := c.WithdrawSvc.Balance(r.Context(), service.UserBalanceRequest{UserID: userID})
 		if err != nil {
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 		// fill proxy struct to marshal response
 		balInfo := UserBal{Current: balanceInfo.Current, Withdrawn: balanceInfo.Withdrawn}
 		// mold the response
-		return controller.NewResponse(nil, balInfo, controller.TypeJson)
+		return controller.NewResponse(nil, balInfo, controller.TypeJson, 0)
 
 	}
 }
@@ -222,12 +222,12 @@ func (c Controller) Withdraw() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
 
 		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
 		if !ok {
-			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText)
+			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText, 0)
 		}
 
 		// proxy struct to unmarshal OrderNumber & Sum
@@ -238,7 +238,7 @@ func (c Controller) Withdraw() controller.ControllerHandler {
 
 		err = json.Unmarshal(body, &inputBody)
 		if err != nil {
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 
 		err = c.WithdrawSvc.Withdraw(
@@ -248,7 +248,7 @@ func (c Controller) Withdraw() controller.ControllerHandler {
 				Sum:         inputBody.Sum,
 			})
 
-		return controller.NewResponse(err, nil, controller.TypeText)
+		return controller.NewResponse(err, nil, controller.TypeText, 0)
 	}
 }
 
@@ -258,17 +258,17 @@ func (c Controller) ListOfWithdrawals() controller.ControllerHandler {
 		// get userID from jwt context (by the key) to get order list related with a specific user
 		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
 		if !ok {
-			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText)
+			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText, 0)
 		}
 
 		withdrawalInfo, err := c.WithdrawSvc.List(r.Context(), service.WithdrawalListRequest{UserID: userID})
 		if err != nil {
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 
 		withdrawList := fillListOfWithdrawals(withdrawalInfo)
 
-		return controller.NewResponse(nil, withdrawList, controller.TypeJson)
+		return controller.NewResponse(nil, withdrawList, controller.TypeJson, 0)
 	}
 }
 

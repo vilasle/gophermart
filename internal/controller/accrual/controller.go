@@ -59,7 +59,7 @@ func (c Controller) OrderInfo() controller.ControllerHandler {
 		number := chi.URLParam(r, "number")
 
 		if number == "" {
-			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
 
 		log.Debug("getting order info", "number", number)
@@ -69,7 +69,7 @@ func (c Controller) OrderInfo() controller.ControllerHandler {
 		})
 
 		if err != nil {
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 
 		info := AccrualsInf{
@@ -80,7 +80,7 @@ func (c Controller) OrderInfo() controller.ControllerHandler {
 
 		log.Debug("order info", "info", info)
 
-		return controller.NewResponse(nil, info, controller.TypeJson)
+		return controller.NewResponse(nil, info, controller.TypeJson, 0)
 	}
 }
 
@@ -98,7 +98,7 @@ func (c Controller) RegisterOrder() controller.ControllerHandler {
 		if err != nil || len(body) == 0 {
 			log.Error("uncorrected request ", "len", len(body), "error", err)
 
-			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
 
 		regReq := RegisterCalculationReq{}
@@ -106,7 +106,7 @@ func (c Controller) RegisterOrder() controller.ControllerHandler {
 		err = json.Unmarshal(body, &regReq)
 		if err != nil {
 			log.Error("unmarshal body failed", "error", err)
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 
 		regCalcReq := service.RegisterCalculationRequest{OrderNumber: regReq.OrderNumber}
@@ -119,9 +119,9 @@ func (c Controller) RegisterOrder() controller.ControllerHandler {
 		err = c.CalculationService.Register(r.Context(), regCalcReq)
 		if err != nil {
 			log.Error("register calculation failed", "error", err)
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
-		return controller.NewResponse(service.StatusOrderSuccessfullyAccepted, nil, controller.TypeText)
+		return controller.NewResponse(nil, nil, controller.TypeText, http.StatusAccepted)
 	}
 }
 
@@ -138,28 +138,28 @@ func (c Controller) AddCalculationRules() controller.ControllerHandler {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
 			log.Error("uncorrected request ", "len", len(body), "error", err)
-			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
 
 		prRegCalcRule := RegisterCalculationRuleReq{}
 		err = json.Unmarshal(body, &prRegCalcRule)
 		if err != nil {
 			log.Error("unmarshal body failed", "error", err)
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 
 		rewardType := convertRewardType(prRegCalcRule.Type)
 		if rewardType == service.CalculationTypeUnknown {
-			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
 
 		log.Debug("register calculation rule", "request", prRegCalcRule)
 		err = c.CalculationRuleService.Register(r.Context(), service.RegisterCalculationRuleRequest{Match: prRegCalcRule.Match, Point: prRegCalcRule.Point, Type: rewardType})
 		if err != nil {
 			log.Error("register calculation rule failed", "error", err)
-			return controller.NewResponse(err, nil, controller.TypeText)
+			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
-		return controller.NewResponse(err, nil, controller.TypeText)
+		return controller.NewResponse(err, nil, controller.TypeText, 0)
 	}
 }
 

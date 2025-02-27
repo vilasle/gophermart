@@ -21,10 +21,11 @@ type Response interface {
 
 // /////////////////////////////////////////////////////////////////////////////////////
 type baseResponse struct {
-	data    []byte
-	cookies []http.Cookie
-	header  map[string]string
-	err     error
+	data        []byte
+	successCode int
+	cookies     []http.Cookie
+	header      map[string]string
+	err         error
 }
 
 func (r baseResponse) Write(w http.ResponseWriter) {
@@ -36,7 +37,7 @@ func (r baseResponse) Write(w http.ResponseWriter) {
 		w.Header().Set(k, v)
 	}
 
-	w.WriteHeader(getErrorCode(r.err))
+	w.WriteHeader(getErrorCode(r.err, r.successCode))
 	w.Write(r.data)
 }
 
@@ -48,27 +49,33 @@ const (
 )
 
 type textResponse struct {
-	data    any
-	cookies []http.Cookie
-	err     error
+	data        any
+	successCode int
+	cookies     []http.Cookie
+	err         error
 }
 
 type jsonResponse struct {
-	data    any
-	cookies []http.Cookie
-	err     error
+	data        any
+	successCode int
+	cookies     []http.Cookie
+	err         error
 }
 
-func NewResponse(err error, data any, kind ResponseType, cookies ...http.Cookie) Response {
+func NewResponse(err error, data any, kind ResponseType, httpCodeIfSuccess int, cookies ...http.Cookie) Response {
 	if cookies == nil {
 		cookies = []http.Cookie{}
 	}
 
+	if httpCodeIfSuccess == 0 {
+		httpCodeIfSuccess = http.StatusOK
+	}
+
 	switch kind {
 	case TypeJson:
-		return jsonResponse{data: data, cookies: cookies, err: err} // TODO: mb MUST use data.([]controller.OrderInf) ???
+		return jsonResponse{data: data, successCode: httpCodeIfSuccess, cookies: cookies, err: err} // TODO: mb MUST use data.([]controller.OrderInf) ???
 	default:
-		return textResponse{data: data, cookies: cookies, err: err}
+		return textResponse{data: data, successCode: httpCodeIfSuccess, cookies: cookies, err: err}
 	}
 }
 
@@ -82,9 +89,10 @@ func (r textResponse) Write(w http.ResponseWriter) {
 	}
 
 	base := baseResponse{
-		data:    body,
-		cookies: r.cookies,
-		err:     r.err,
+		data:        body,
+		successCode: r.successCode,
+		cookies:     r.cookies,
+		err:         r.err,
 		header: map[string]string{
 			"Content-Type": "text/plain",
 		},
@@ -105,9 +113,10 @@ func (r jsonResponse) Write(w http.ResponseWriter) {
 	}
 
 	base := baseResponse{
-		data:    body,
-		cookies: r.cookies,
-		err:     r.err,
+		data:        body,
+		successCode: r.successCode,
+		cookies:     r.cookies,
+		err:         r.err,
 		header: map[string]string{
 			"Content-Type": "application/json",
 		},
@@ -117,15 +126,13 @@ func (r jsonResponse) Write(w http.ResponseWriter) {
 
 }
 
-func getErrorCode(err error) int {
+func getErrorCode(err error, successCode int) int {
 	if err == nil {
-		return http.StatusOK
+		return successCode
 	}
+
 	if errors.Is(err, service.ErrInvalidFormat) {
 		return http.StatusBadRequest
-	}
-	if errors.Is(err, service.StatusOrderSuccessfullyAccepted) { // for POST /api/orders in accrual (status 202)
-		return http.StatusAccepted
 	}
 
 	if errors.Is(err, service.ErrNotEnoughPoints) { // for POST /api/orders in accrual (status 202)
