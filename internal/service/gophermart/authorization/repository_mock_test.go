@@ -65,19 +65,19 @@ func (mr *MockAuthorizationRepositoryMockRecorder) CheckUser(arg0, arg1 interfac
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckUser", reflect.TypeOf((*MockAuthorizationRepository)(nil).CheckUser), arg0, arg1)
 }
 
-// CheckUserById mocks base method.
-func (m *MockAuthorizationRepository) CheckUserById(arg0 context.Context, arg1 string) (gophermart.UserInfo, error) {
+// CheckUserByID mocks base method.
+func (m *MockAuthorizationRepository) CheckUserByID(arg0 context.Context, arg1 string) (gophermart.UserInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckUserById", arg0, arg1)
+	ret := m.ctrl.Call(m, "CheckUserByID", arg0, arg1)
 	ret0, _ := ret[0].(gophermart.UserInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// CheckUserById indicates an expected call of CheckUserById.
-func (mr *MockAuthorizationRepositoryMockRecorder) CheckUserById(arg0, arg1 interface{}) *gomock.Call {
+// CheckUserByID indicates an expected call of CheckUserByID.
+func (mr *MockAuthorizationRepositoryMockRecorder) CheckUserByID(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckUserById", reflect.TypeOf((*MockAuthorizationRepository)(nil).CheckUserById), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckUserByID", reflect.TypeOf((*MockAuthorizationRepository)(nil).CheckUserByID), arg0, arg1)
 }
 
 // MockWithdrawalRepository is a mock of WithdrawalRepository interface.

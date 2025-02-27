@@ -12,7 +12,7 @@ const (
 type AuthorizationRepository interface {
 	AddUser(context.Context, AuthData) (UserInfo, error)
 	CheckUser(context.Context, AuthData) (UserInfo, error)
-	CheckUserById(context.Context, string) (UserInfo, error)
+	CheckUserByID(context.Context, string) (UserInfo, error)
 }
 
 type WithdrawalRepository interface {

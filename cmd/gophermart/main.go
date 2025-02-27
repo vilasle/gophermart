@@ -30,21 +30,21 @@ import (
 type cliArgs struct {
 	addr        string
 	accrualAddr string
-	dbUrl       string
+	dbURI       string
 	debug       bool
 }
 
 func initCli() cliArgs {
 	args := cliArgs{}
 	pflag.StringVarP(&args.addr, "address", "a", ":8080", "address to listen on")
-	pflag.StringVarP(&args.dbUrl, "database", "d", "", "database url e.g postgres://postgres:postgres@localhost:5432/postgres")
+	pflag.StringVarP(&args.dbURI, "database", "d", "", "database url e.g postgres://postgres:postgres@localhost:5432/postgres")
 	pflag.StringVarP(&args.accrualAddr, "accrual", "r", "", "accrual endpoint")
 
 	pflag.BoolVarP(&args.debug, "debug", "D", false, "enable debug message")
 	pflag.Parse()
 
 	args.addr = getEnv("RUN_ADDRESS", args.addr)
-	args.dbUrl = getEnv("DATABASE_URI", args.dbUrl)
+	args.dbURI = getEnv("DATABASE_URI", args.dbURI)
 	args.accrualAddr = getEnv("ACCRUAL_SYSTEM_ADDRESS", args.accrualAddr)
 
 	return args
@@ -67,7 +67,7 @@ func main() {
 		logger.Init(os.Stdout, logger.InfoLevel)
 	}
 
-	if args.dbUrl == "" {
+	if args.dbURI == "" {
 		logger.Error("database url is required")
 		pflag.Usage()
 		os.Exit(1)
@@ -81,9 +81,9 @@ func main() {
 
 	ctx := context.Background()
 
-	db, err := sql.Open("pgx", args.dbUrl)
+	db, err := sql.Open("pgx", args.dbURI)
 	if err != nil {
-		logger.Error("connecting to database failed", "url", args.dbUrl, "error", err)
+		logger.Error("connecting to database failed", "url", args.dbURI, "error", err)
 		os.Exit(1)
 	}
 	defer db.Close()

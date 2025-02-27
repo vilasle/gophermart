@@ -49,12 +49,12 @@ type Controller struct {
 // GET /api/orders/{number}
 func (c Controller) OrderInfo() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		reqId := r.Context().Value(middleware.RequestIDKey)
-		if reqId == nil {
-			reqId = ""
+		reqID := r.Context().Value(middleware.RequestIDKey)
+		if reqID == nil {
+			reqID = ""
 		}
 
-		log := logger.With("id", reqId.(string))
+		log := logger.With("id", reqID.(string))
 
 		number := chi.URLParam(r, "number")
 
@@ -80,19 +80,19 @@ func (c Controller) OrderInfo() controller.ControllerHandler {
 
 		log.Debug("order info", "info", info)
 
-		return controller.NewResponse(nil, info, controller.TypeJson, 0)
+		return controller.NewResponse(nil, info, controller.TypeJSON, 0)
 	}
 }
 
 // POST /api/orders
 func (c Controller) RegisterOrder() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		reqId := r.Context().Value(middleware.RequestIDKey)
-		if reqId == nil {
-			reqId = ""
+		reqID := r.Context().Value(middleware.RequestIDKey)
+		if reqID == nil {
+			reqID = ""
 		}
 
-		log := logger.With("id", reqId.(string))
+		log := logger.With("id", reqID.(string))
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
@@ -128,12 +128,12 @@ func (c Controller) RegisterOrder() controller.ControllerHandler {
 // POST /api/goods
 func (c Controller) AddCalculationRules() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		reqId := r.Context().Value(middleware.RequestIDKey)
-		if reqId == nil {
-			reqId = ""
+		reqID := r.Context().Value(middleware.RequestIDKey)
+		if reqID == nil {
+			reqID = ""
 		}
 
-		log := logger.With("id", reqId.(string))
+		log := logger.With("id", reqID.(string))
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {

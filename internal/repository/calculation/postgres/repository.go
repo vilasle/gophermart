@@ -110,7 +110,7 @@ func (r CalculationRepository) AddRules(ctx context.Context, dto ...decl.AddingR
 	}
 	txt, args := sp.BuildWithFlavor(sqlbuilder.PostgreSQL)
 	row := r.db.QueryRowContext(ctx, txt, args...)
-
+	
 	err = row.Scan(&id)
 
 	return id, getRepositoryError(err)
@@ -128,6 +128,12 @@ func (r CalculationRepository) Rules(ctx context.Context, dto decl.RuleFilter) (
 	if err != nil {
 		return nil, getRepositoryError(err)
 	}
+
+	if rows.Err() != nil {
+		return nil, getRepositoryError(rows.Err())
+	}
+	defer rows.Close()
+
 	rules := make([]decl.RuleInfo, 0)
 	for rows.Next() {
 		var rule decl.RuleInfo

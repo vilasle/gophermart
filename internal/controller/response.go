@@ -45,7 +45,7 @@ type ResponseType = int
 
 const (
 	TypeText ResponseType = iota + 1
-	TypeJson
+	TypeJSON
 )
 
 type textResponse struct {
@@ -72,7 +72,7 @@ func NewResponse(err error, data any, kind ResponseType, httpCodeIfSuccess int, 
 	}
 
 	switch kind {
-	case TypeJson:
+	case TypeJSON:
 		return jsonResponse{data: data, successCode: httpCodeIfSuccess, cookies: cookies, err: err} // TODO: mb MUST use data.([]controller.OrderInf) ???
 	default:
 		return textResponse{data: data, successCode: httpCodeIfSuccess, cookies: cookies, err: err}

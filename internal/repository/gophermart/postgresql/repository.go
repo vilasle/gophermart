@@ -51,9 +51,9 @@ func (r PostgresqlGophermartRepository) CheckUser(ctx context.Context, dto mart.
 	return mart.UserInfo{ID: id, Login: login, PasswordHash: password}, getRepositoryError(err)
 }
 
-func (r PostgresqlGophermartRepository) CheckUserById(ctx context.Context, reqId string) (mart.UserInfo, error) {
+func (r PostgresqlGophermartRepository) CheckUserByID(ctx context.Context, reqID string) (mart.UserInfo, error) {
 	sb := sqlbuilder.Select("id", "login", "password").From(`"user"`)
-	sb.Where(sb.Equal("id", reqId))
+	sb.Where(sb.Equal("id", reqID))
 
 	txt, args := sb.BuildWithFlavor(sqlbuilder.PostgreSQL)
 	row := r.db.QueryRowContext(ctx, txt, args...)
@@ -132,6 +132,10 @@ func (r PostgresqlGophermartRepository) Transactions(ctx context.Context, dto ma
 	if err != nil {
 		return nil, err
 	}
+	if rows.Err() != nil {
+		return nil, getRepositoryError(rows.Err())
+	}
+	defer rows.Close()
 
 	transactions := make([]mart.Transaction, 0)
 	for rows.Next() {
@@ -186,6 +190,12 @@ func (r PostgresqlGophermartRepository) List(ctx context.Context, dto mart.Order
 	if err != nil {
 		return nil, getRepositoryError(err)
 	}
+
+	if rows.Err() != nil {
+		return nil, getRepositoryError(rows.Err())
+	}
+
+	defer rows.Close()
 
 	orders := make([]mart.OrderInfo, 0)
 	for rows.Next() {

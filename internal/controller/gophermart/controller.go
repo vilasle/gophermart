@@ -116,7 +116,7 @@ func (c Controller) UserLogin() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeJson, 0)
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeJSON, 0)
 		}
 
 		// proxy struct to unmarshal
@@ -192,7 +192,7 @@ func (c Controller) ListOrdersRelatedWithUser() controller.ControllerHandler {
 		}
 		//fill the proxy slice of structs (with struct tags) to marshal the response
 		orInfo := fillListOfOrders(orderInfo)
-		return controller.NewResponse(nil, orInfo, controller.TypeJson, 0)
+		return controller.NewResponse(nil, orInfo, controller.TypeJSON, 0)
 	}
 }
 
@@ -212,7 +212,7 @@ func (c Controller) BalanceStateByUser() controller.ControllerHandler {
 		// fill proxy struct to marshal response
 		balInfo := UserBal{Current: balanceInfo.Current, Withdrawn: balanceInfo.Withdrawn}
 		// mold the response
-		return controller.NewResponse(nil, balInfo, controller.TypeJson, 0)
+		return controller.NewResponse(nil, balInfo, controller.TypeJSON, 0)
 
 	}
 }
@@ -268,7 +268,7 @@ func (c Controller) ListOfWithdrawals() controller.ControllerHandler {
 
 		withdrawList := fillListOfWithdrawals(withdrawalInfo)
 
-		return controller.NewResponse(nil, withdrawList, controller.TypeJson, 0)
+		return controller.NewResponse(nil, withdrawList, controller.TypeJSON, 0)
 	}
 }
 

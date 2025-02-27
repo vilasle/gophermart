@@ -73,7 +73,7 @@ func (svc AuthorizationService) CheckByUserID(ctx context.Context, id string) er
 		return service.ErrInvalidFormat
 	}
 
-	_, err := svc.rep.CheckUserById(ctx, id)
+	_, err := svc.rep.CheckUserByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gophermart.ErrEmptyResult) {
 			return service.ErrEntityDoesNotExists
