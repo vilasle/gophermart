@@ -49,6 +49,7 @@ type OrderListRequest struct {
 }
 
 type OrderInfo struct {
+	UserID    string
 	Number    string
 	Status    int
 	Accrual   float64

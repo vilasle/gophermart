@@ -3,6 +3,7 @@ package service
 import "errors"
 
 var ErrInvalidFormat = errors.New("invalid format")
+var ErrWasUploadEarly = errors.New("was upload early")
 var ErrDuplicate = errors.New("login name already exists")
 var ErrEntityDoesNotExists = errors.New("entity does not exists")
 var ErrLimit = errors.New("limit exceeded")

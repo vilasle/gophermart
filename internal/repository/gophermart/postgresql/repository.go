@@ -177,12 +177,15 @@ func (r PostgresqlGophermartRepository) Update(ctx context.Context, dto mart.Ord
 
 func (r PostgresqlGophermartRepository) List(ctx context.Context, dto mart.OrderListRequest) ([]mart.OrderInfo, error) {
 	sp := sqlbuilder.
-		Select("number", "created_at", "status", "sum").
+		Select("user_id", "number", "created_at", "status", "sum").
 		From(`"order"`)
-	sp.Where(sp.Equal("user_id", dto.UserID))
-
+	
 	if len(dto.OrderNumber) > 0 {
 		sp.Where(sp.Equal("number", dto.OrderNumber))
+	}
+
+	if len(dto.UserID) > 0 {
+		sp.Where(sp.Equal("user_id", dto.UserID))
 	}
 
 	txt, args := sp.BuildWithFlavor(sqlbuilder.PostgreSQL)
@@ -200,7 +203,7 @@ func (r PostgresqlGophermartRepository) List(ctx context.Context, dto mart.Order
 	orders := make([]mart.OrderInfo, 0)
 	for rows.Next() {
 		order := mart.OrderInfo{}
-		err := rows.Scan(&order.Number, &order.CreatedAt, &order.Status, &order.Accrual)
+		err := rows.Scan(&order.UserID, &order.Number, &order.CreatedAt, &order.Status, &order.Accrual)
 		if err != nil {
 			return nil, getRepositoryError(err)
 		}

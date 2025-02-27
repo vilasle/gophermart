@@ -159,6 +159,10 @@ func getErrorCode(err error, successCode int) int {
 		return http.StatusTooManyRequests // 429 — превышено количество запросов к сервису
 	}
 
+	if errors.Is(err, service.ErrWasUploadEarly) {
+		return http.StatusOK
+	}
+
 	return http.StatusInternalServerError
 
 }

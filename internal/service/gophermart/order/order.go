@@ -50,10 +50,12 @@ func (s OrderService) Register(ctx context.Context, dto service.RegisterOrderReq
 	}
 
 	rld := gophermart.OrderListRequest{
-		UserID:      dto.UserID,
 		OrderNumber: dto.Number,
 	}
 	if result, err := s.rep.List(ctx, rld); err == nil && len(result) > 0 {
+		if result[0].UserID == dto.UserID {
+			return service.ErrWasUploadEarly
+		}
 		return service.ErrDuplicate
 	} else if err != nil {
 		return err
