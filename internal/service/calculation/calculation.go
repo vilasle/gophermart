@@ -3,6 +3,7 @@ package calculation
 import (
 	"context"
 	"errors"
+	"math"
 	"regexp"
 	"sync"
 
@@ -187,7 +188,7 @@ func (c CalculationService) fillCalculatedDto(orderNumber string, value float64)
 
 	return repository.AddCalculationResult{
 		OrderNumber: orderNumber,
-		Value:       value,
+		Value:       math.Round(value*100) / 100,
 		Status:      status,
 	}
 }
