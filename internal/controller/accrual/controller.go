@@ -100,7 +100,8 @@ func (c Controller) RegisterOrder() controller.ControllerHandler {
 
 			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
-
+		log.Info("register order", "body", string(body))
+		
 		regReq := RegisterCalculationReq{}
 
 		err = json.Unmarshal(body, &regReq)
@@ -140,6 +141,8 @@ func (c Controller) AddCalculationRules() controller.ControllerHandler {
 			log.Error("uncorrected request ", "len", len(body), "error", err)
 			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
+		log.Info("adding rules", "body", string(body))
+		
 
 		prRegCalcRule := RegisterCalculationRuleReq{}
 		err = json.Unmarshal(body, &prRegCalcRule)

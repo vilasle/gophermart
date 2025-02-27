@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/golang-jwt/jwt/v4"
 
 	"github.com/vilasle/gophermart/internal/controller"
-	"github.com/vilasle/gophermart/internal/middleware"
+	"github.com/vilasle/gophermart/internal/logger"
+
+	_mdw "github.com/vilasle/gophermart/internal/middleware"
 	"github.com/vilasle/gophermart/internal/service"
 )
 
@@ -69,10 +72,19 @@ type Controller struct {
 // POST /api/user/register
 func (c Controller) UserRegister() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
+		reqID := r.Context().Value(middleware.RequestIDKey)
+		if reqID == nil {
+			reqID = ""
+		}
+
+		log := logger.With("id", reqID.(string))
+
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
 			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
+
+		log.Info("registering user", "body", string(body))
 
 		// proxy struct to unmarshal
 		regReq := registerReq{}
@@ -102,7 +114,7 @@ func (c Controller) UserRegister() controller.ControllerHandler {
 
 		// generate response (set cookie) and response
 		return controller.NewResponse(nil, nil, controller.TypeText, http.StatusOK, http.Cookie{
-			Name:     middleware.CookieKey,
+			Name:     _mdw.CookieKey,
 			Value:    tokenStr,
 			Secure:   false,
 			HttpOnly: true,
@@ -114,10 +126,18 @@ func (c Controller) UserRegister() controller.ControllerHandler {
 // POST /api/user/login
 func (c Controller) UserLogin() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
+		reqID := r.Context().Value(middleware.RequestIDKey)
+		if reqID == nil {
+			reqID = ""
+		}
+
+		log := logger.With("id", reqID.(string))
+
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
 			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeJSON, 0)
 		}
+		log.Info("logging in user", "body", string(body))
 
 		// proxy struct to unmarshal
 		regReq := registerReq{}
@@ -144,7 +164,7 @@ func (c Controller) UserLogin() controller.ControllerHandler {
 		}
 		// set cookie to mold the response
 		return controller.NewResponse(nil, nil, controller.TypeText, 0, http.Cookie{
-			Name:     middleware.CookieKey,
+			Name:     _mdw.CookieKey,
 			Value:    tokenStr,
 			Secure:   false,
 			HttpOnly: true,
@@ -156,12 +176,20 @@ func (c Controller) UserLogin() controller.ControllerHandler {
 // POST /api/user/orders
 func (c Controller) RelateOrderWithUser() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
-		body, err := io.ReadAll(r.Body)
-		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
-			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
+		reqID := r.Context().Value(middleware.RequestIDKey)
+		if reqID == nil {
+			reqID = ""
 		}
 
-		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+		log := logger.With("id", reqID.(string))
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil || len(body) == 0 {
+			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
+		}
+		log.Info("relate order with user", "body", string(body))
+
+		userID, ok := r.Context().Value(_mdw.UserIDKey).(string)
 		if !ok {
 			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText, 0)
 		}
@@ -181,7 +209,7 @@ func (c Controller) RelateOrderWithUser() controller.ControllerHandler {
 func (c Controller) ListOrdersRelatedWithUser() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
 		// get userID from jwt context (by the key) to get order list related with a specific user
-		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+		userID, ok := r.Context().Value(_mdw.UserIDKey).(string)
 		if !ok {
 			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText, 0)
 		}
@@ -199,11 +227,19 @@ func (c Controller) ListOrdersRelatedWithUser() controller.ControllerHandler {
 // GET /api/user/balance
 func (c Controller) BalanceStateByUser() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
+		reqID := r.Context().Value(middleware.RequestIDKey)
+		if reqID == nil {
+			reqID = ""
+		}
+
+		log := logger.With("id", reqID.(string))
+
 		// get userID from jwt context (by the key) to get order list related with a specific user
-		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+		userID, ok := r.Context().Value(_mdw.UserIDKey).(string)
 		if !ok {
 			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText, 0)
 		}
+		log.Info("getting balance", "userID", userID)
 
 		balanceInfo, err := c.WithdrawSvc.Balance(r.Context(), service.UserBalanceRequest{UserID: userID})
 		if err != nil {
@@ -220,15 +256,26 @@ func (c Controller) BalanceStateByUser() controller.ControllerHandler {
 // POST /api/user/balance/withdraw
 func (c Controller) Withdraw() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
+		reqID := r.Context().Value(middleware.RequestIDKey)
+		if reqID == nil {
+			reqID = ""
+		}
+
+		log := logger.With("id", reqID.(string))
+
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 { // TODO: это лишняя проверка?
 			return controller.NewResponse(service.ErrInvalidFormat, nil, controller.TypeText, 0)
 		}
 
-		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+		log.Info("withdraw", "body", string(body))
+
+		userID, ok := r.Context().Value(_mdw.UserIDKey).(string)
 		if !ok {
 			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText, 0)
 		}
+
+		log.Info("withdraw", "userID", userID)
 
 		// proxy struct to unmarshal OrderNumber & Sum
 		inputBody := struct {
@@ -255,11 +302,19 @@ func (c Controller) Withdraw() controller.ControllerHandler {
 // GET /api/user/withdrawals (AUTH only)
 func (c Controller) ListOfWithdrawals() controller.ControllerHandler {
 	return func(r *http.Request) controller.Response {
+		reqID := r.Context().Value(middleware.RequestIDKey)
+		if reqID == nil {
+			reqID = ""
+		}
+
+		log := logger.With("id", reqID.(string))
+
 		// get userID from jwt context (by the key) to get order list related with a specific user
-		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+		userID, ok := r.Context().Value(_mdw.UserIDKey).(string)
 		if !ok {
 			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText, 0)
 		}
+		log.Info("getting withdrawals", "userID", userID)
 
 		withdrawalInfo, err := c.WithdrawSvc.List(r.Context(), service.WithdrawalListRequest{UserID: userID})
 		if err != nil {
