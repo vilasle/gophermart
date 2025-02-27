@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/vilasle/gophermart/internal/controller"
 	"github.com/vilasle/gophermart/internal/logger"
+	"github.com/vilasle/gophermart/internal/tool/order/validation"
 
 	_mdw "github.com/vilasle/gophermart/internal/middleware"
 	"github.com/vilasle/gophermart/internal/service"
@@ -194,6 +196,17 @@ func (c Controller) RelateOrderWithUser() controller.ControllerHandler {
 			return controller.NewResponse(service.ErrWrongNameOrPassword, nil, controller.TypeText, 0)
 		}
 
+		number := string(body)
+
+		n, err := strconv.Atoi(number)
+		if err != nil {
+			return controller.NewResponse(controller.ErrWrongNumberOfOrder, nil, controller.TypeText, 0)
+		}
+
+		if !validation.ValidNumber(n) {
+			return controller.NewResponse(controller.ErrWrongNumberOfOrder, nil, controller.TypeText, 0)
+		}
+
 		// move the string(body) into the func in service to check order number (LUNA) and save it
 		err = c.OrderSvc.Register(r.Context(), service.RegisterOrderRequest{
 			Number: string(body),
@@ -286,6 +299,17 @@ func (c Controller) Withdraw() controller.ControllerHandler {
 		err = json.Unmarshal(body, &inputBody)
 		if err != nil {
 			return controller.NewResponse(err, nil, controller.TypeText, 0)
+		}
+
+		number := inputBody.Order
+
+		n, err := strconv.Atoi(number)
+		if err != nil {
+			return controller.NewResponse(controller.ErrWrongNumberOfOrder, nil, controller.TypeText, 0)
+		}
+
+		if !validation.ValidNumber(n) {
+			return controller.NewResponse(controller.ErrWrongNumberOfOrder, nil, controller.TypeText, 0)
 		}
 
 		err = c.WithdrawSvc.Withdraw(
