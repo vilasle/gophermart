@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	StatusNew        = "REGISTERED"
+	StatusNew        = "NEW"
 	StatusProcessing = "PROCESSING"
 	StatusInvalid    = "INVALID"
 	StatusProcessed  = "PROCESSED"
