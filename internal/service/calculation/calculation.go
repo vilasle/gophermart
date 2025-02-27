@@ -148,6 +148,8 @@ func (c CalculationService) calculateOrder(ctx context.Context, event Event) {
 		bonus += c.calculateProduct(product)
 	}
 
+	logger.Debug("calculating order", "order", number, "products", products, "bonus", bonus)
+
 	resultDto := c.fillCalculatedDto(number, bonus)
 
 	if err := c.repCalc.UpdateCalculationResult(ctx, resultDto); err != nil {
@@ -166,7 +168,7 @@ func (c CalculationService) calculateOrder(ctx context.Context, event Event) {
 func (c CalculationService) calculateProduct(product service.ProductRow) float64 {
 	c.mxRules.Lock()
 	defer c.mxRules.Unlock()
-
+	logger.Debug("calculating product", "product", product)
 	for _, rule := range c.rules {
 		if r := rule.calculate(product.Name, product.Price); r > 0 {
 			return r
