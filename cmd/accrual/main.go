@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"os"
 	"os/signal"
@@ -51,11 +52,11 @@ func getEnv(key, fallback string) string {
 func main() {
 	args := initCli()
 
-	if args.debug {
-		logger.Init(os.Stdout, logger.DebugLevel)
-	} else {
-		logger.Init(os.Stdout, logger.InfoLevel)
-	}
+	// if args.debug {
+	logger.Init(os.Stdout, logger.DebugLevel)
+	// } else {
+	// 	logger.Init(os.Stdout, logger.InfoLevel)
+	// }
 
 	if args.dbURI == "" {
 		logger.Error("database url is required")
@@ -119,7 +120,10 @@ func main() {
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
-			logger.Error("starting server failed", "error", err)
+			if errors.Is(err, http.ErrServerClosed) {
+				logger.Info("starting stopped")
+			}
+			logger.Error("starting failed", "error", err)
 		}
 		sigint <- os.Interrupt
 	}()
