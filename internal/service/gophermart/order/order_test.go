@@ -208,7 +208,7 @@ func TestOrderService_Register(t *testing.T) {
 				dtoListOut: []gophermart.OrderInfo{},
 				errListOut: nil,
 				setupList: func(m *MockOrderRepository, ctx context.Context, dtoIn gophermart.OrderListRequest, dtoOut []gophermart.OrderInfo, err error) {
-					m.EXPECT().List(ctx, dtoIn).Return(dtoOut, err)
+					m.EXPECT().List(gomock.Any(), dtoIn).Return(dtoOut, err)
 				},
 
 				dtoCreateIn: gophermart.OrderCreateRequest{
@@ -217,7 +217,7 @@ func TestOrderService_Register(t *testing.T) {
 				},
 				errCreateOut: nil,
 				setupCreate: func(m *MockOrderRepository, ctx context.Context, dtoIn gophermart.OrderCreateRequest, err error) {
-					m.EXPECT().Create(ctx, dtoIn).Return(err)
+					m.EXPECT().Create(gomock.Any(), dtoIn).Return(err)
 				},
 				dtoAccrualIn: service.AccrualsFilterRequest{
 					Number: "1234567890",
@@ -229,12 +229,13 @@ func TestOrderService_Register(t *testing.T) {
 				},
 				errAccrualOut: nil,
 				setupAccrual: func(m *MockAccrualService, ctx context.Context, dtoIn service.AccrualsFilterRequest, dtoOut service.AccrualsInfo, err error) {
-					m.EXPECT().Accruals(ctx, dtoIn).Return(dtoOut, err)
+					m.EXPECT().Accruals(gomock.Any(), dtoIn).Return(dtoOut, err)
 				},
 				dtoUpdateIn: gophermart.OrderUpdateRequest{
-					Number: "1234567890",
-					Status: gophermart.StatusProcessed,
-					UserID: "1234567890",
+					Number:  "1234567890",
+					Status:  gophermart.StatusProcessed,
+					UserID:  "1234567890",
+					Accrual: 100,
 				},
 				errUpdateOut: nil,
 				setupUpdate: func(m *MockOrderRepository, ctx context.Context, dtoIn gophermart.OrderUpdateRequest, err error) {
@@ -299,6 +300,7 @@ func TestOrderService_Register(t *testing.T) {
 					Number: "1234567890",
 					Status: gophermart.StatusProcessed,
 					UserID: "1234567890",
+					Accrual: 100,
 				},
 				errUpdateOut: nil,
 				setupUpdate: func(m *MockOrderRepository, ctx context.Context, dtoIn gophermart.OrderUpdateRequest, err error) {

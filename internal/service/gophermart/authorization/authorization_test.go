@@ -216,7 +216,6 @@ func TestAuthorizationService_Authorize(t *testing.T) {
 			mockSetting: mockSetting{
 				dtoIn: gophermart.AuthData{
 					Login:        "login",
-					PasswordHash: passwordHash,
 				},
 				dtoOut: gophermart.UserInfo{},
 				errOut: gophermart.ErrEmptyResult,
@@ -239,7 +238,6 @@ func TestAuthorizationService_Authorize(t *testing.T) {
 			mockSetting: mockSetting{
 				dtoIn: gophermart.AuthData{
 					Login:        "login",
-					PasswordHash: passwordHash,
 				},
 				dtoOut: gophermart.UserInfo{},
 				errOut: repErr,
@@ -262,7 +260,6 @@ func TestAuthorizationService_Authorize(t *testing.T) {
 			mockSetting: mockSetting{
 				dtoIn: gophermart.AuthData{
 					Login:        "login",
-					PasswordHash: passwordHash,
 				},
 				dtoOut: gophermart.UserInfo{
 					ID:           "1234567890",
@@ -290,7 +287,6 @@ func TestAuthorizationService_Authorize(t *testing.T) {
 			mockSetting: mockSetting{
 				dtoIn: gophermart.AuthData{
 					Login:        "login",
-					PasswordHash: passwordHash,
 				},
 				dtoOut: gophermart.UserInfo{
 					ID:           "1234567890",
