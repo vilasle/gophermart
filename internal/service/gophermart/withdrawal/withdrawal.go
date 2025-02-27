@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strconv"
 
 	"github.com/vilasle/gophermart/internal/repository/gophermart"
 	"github.com/vilasle/gophermart/internal/service"
+	"github.com/vilasle/gophermart/internal/tool/order/validation"
 )
 
 type WithdrawalService struct {
@@ -21,7 +23,17 @@ func (s WithdrawalService) Withdraw(ctx context.Context, dto service.WithdrawalR
 	if dto.UserID == "" || dto.OrderNumber == "" || dto.Sum == 0 {
 		return service.ErrInvalidFormat
 	}
-	err := s.rep.Expense(ctx, gophermart.WithdrawalRequest{
+
+	n, err := strconv.Atoi(dto.OrderNumber)
+	if err != nil {
+		return service.ErrWrongNumberOfOrder
+	}
+
+	if !validation.ValidNumber(n) {
+		return service.ErrWrongNumberOfOrder
+	}
+
+	err = s.rep.Expense(ctx, gophermart.WithdrawalRequest{
 		UserID:      dto.UserID,
 		OrderNumber: dto.OrderNumber,
 		Sum:         dto.Sum,

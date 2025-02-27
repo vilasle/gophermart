@@ -3,11 +3,13 @@ package order
 import (
 	"context"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/vilasle/gophermart/internal/logger"
 	"github.com/vilasle/gophermart/internal/repository/gophermart"
 	"github.com/vilasle/gophermart/internal/service"
+	"github.com/vilasle/gophermart/internal/tool/order/validation"
 )
 
 const (
@@ -47,6 +49,15 @@ func NewOrderService(rep gophermart.OrderRepository, accrual service.AccrualServ
 func (s OrderService) Register(ctx context.Context, dto service.RegisterOrderRequest) error {
 	if dto.Number == "" || dto.UserID == "" {
 		return service.ErrInvalidFormat
+	}
+
+	n, err := strconv.Atoi(dto.Number)
+	if err != nil {
+		return service.ErrWrongNumberOfOrder
+	}
+
+	if !validation.ValidNumber(n) {
+		return service.ErrWrongNumberOfOrder
 	}
 
 	rld := gophermart.OrderListRequest{
