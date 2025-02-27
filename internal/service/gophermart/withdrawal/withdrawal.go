@@ -93,7 +93,12 @@ func (s WithdrawalService) Balance(ctx context.Context, dto service.UserBalanceR
 			balance.Withdrawn += h.Sum
 		}
 	}
-	balance.Current += balance.Withdrawn
+
+	if balance.Withdrawn < 0 {
+		balance.Withdrawn = -balance.Withdrawn
+	}
+
+	balance.Current -= balance.Withdrawn
 
 	balance.Current = math.Round(balance.Current*100) / 100
 	balance.Withdrawn = math.Round(balance.Withdrawn*100) / 100
