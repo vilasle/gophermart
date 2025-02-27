@@ -288,12 +288,15 @@ func (c Controller) Withdraw() controller.ControllerHandler {
 			return controller.NewResponse(err, nil, controller.TypeText, 0)
 		}
 
-		err = c.WithdrawSvc.Withdraw(
-			r.Context(), service.WithdrawalRequest{
-				UserID:      userID,
-				OrderNumber: inputBody.Order,
-				Sum:         inputBody.Sum,
-			})
+		input := service.WithdrawalRequest{
+			UserID:      userID,
+			OrderNumber: inputBody.Order,
+			Sum:         inputBody.Sum,
+		}
+
+		err = c.WithdrawSvc.Withdraw(r.Context(), input)
+
+		log.Info("withdraw request", "request", input, "userID", userID, "result", err)
 
 		return controller.NewResponse(err, nil, controller.TypeText, 0)
 	}
@@ -322,6 +325,8 @@ func (c Controller) ListOfWithdrawals() controller.ControllerHandler {
 		}
 
 		withdrawList := fillListOfWithdrawals(withdrawalInfo)
+
+		log.Info("getting withdrawals", "withdrawList", withdrawList, "userID", userID)
 
 		return controller.NewResponse(nil, withdrawList, controller.TypeJSON, 0)
 	}
