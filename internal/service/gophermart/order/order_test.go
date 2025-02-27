@@ -130,7 +130,7 @@ func TestOrderService_Register(t *testing.T) {
 				dtoListOut: []gophermart.OrderInfo{
 					{
 						Number:  "1234567890",
-						Status:  "INVALID",
+						Status:  gophermart.StatusInvalid,
 						Accrual: 0,
 					},
 				},
@@ -434,12 +434,12 @@ func TestOrderService_List(t *testing.T) {
 				dtoOut: []gophermart.OrderInfo{
 					{
 						Number:  "123456",
-						Status:  "INVALID",
+						Status:  gophermart.StatusInvalid,
 						Accrual: 0,
 					},
 					{
 						Number:  "65432",
-						Status:  "PROCESSED",
+						Status:  gophermart.StatusProcessed,
 						Accrual: 100,
 					},
 				},

@@ -24,7 +24,7 @@ const secretKey = "supersecretkey"
 ////////////////proxy-structs to convert data to structs with struct tags /////////////////////////////////////////////
 
 // OrderInf is used to marshal data in GET /api/user/orders
-type OrderInf struct {
+type OrderInfo struct {
 	Number    string    `json:"number"`
 	Status    string    `json:"status"`
 	Accrual   float64   `json:"accrual,omitempty"` // there may be no any reward
@@ -186,12 +186,8 @@ func (c Controller) ListOrdersRelatedWithUser() controller.ControllerHandler {
 			return controller.NewResponse(err, nil, controller.TypeText)
 		}
 		//fill the proxy slice of structs (with struct tags) to marshal the response
-		orInfo := make([]OrderInf, 0, len(orderInfo))
-		for i := range orderInfo {
-			orInfo = append(orInfo, OrderInf{Number: orderInfo[i].Number, Status: orderInfo[i].Status, Accrual: orderInfo[i].Accrual, CreatedAt: orderInfo[i].CreatedAt})
-		}
+		orInfo := fillListOfOrders(orderInfo)
 		return controller.NewResponse(nil, orInfo, controller.TypeJson)
-
 	}
 }
 
@@ -281,4 +277,18 @@ func genJWTTokenString(userID string) (string, error) {
 	// возвращаем строку токена
 	return tokenString, nil
 
+}
+
+func fillListOfOrders(orderInfo []service.OrderInfo) []OrderInfo {
+	orders := make([]OrderInfo, 0, len(orderInfo))
+	for _, v := range orderInfo {
+		order := OrderInfo{
+			Number:    v.Number,
+			Status:    v.Status,
+			Accrual:   v.Accrual,
+			CreatedAt: v.CreatedAt,
+		}
+		orders = append(orders, order)
+	}
+	return orders
 }

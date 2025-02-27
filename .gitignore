@@ -26,3 +26,4 @@ vendor/
 cover.html
 schema.xml
 bin
+__debug*

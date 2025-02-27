@@ -37,20 +37,20 @@ type OrderCreateRequest struct {
 }
 
 type OrderUpdateRequest struct {
-	UserID string
-	Number string
-	Status int
+	UserID  string
+	Number  string
+	Status  int
 	Accrual float64
 }
 
 type OrderListRequest struct {
-	UserID string
+	UserID      string
 	OrderNumber string
 }
 
 type OrderInfo struct {
-	Number	string
-	Status	string
+	Number    string
+	Status    int
 	Accrual   float64
 	CreatedAt time.Time
 }
@@ -60,7 +60,7 @@ type AccrualRequest struct {
 }
 
 type AccrualInfo struct {
-	Number string
-	Status string
+	Number  string
+	Status  string
 	Accrual float64
 }

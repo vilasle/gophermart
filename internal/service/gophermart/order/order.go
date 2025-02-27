@@ -88,7 +88,7 @@ func (s OrderService) List(ctx context.Context, dto service.ListOrderRequest) ([
 	for i, order := range result {
 		orders[i] = service.OrderInfo{
 			Number:    order.Number,
-			Status:    order.Status,
+			Status:    viewOfStatus(order.Status),
 			Accrual:   order.Accrual,
 			CreatedAt: order.CreatedAt,
 		}
@@ -99,6 +99,21 @@ func (s OrderService) List(ctx context.Context, dto service.ListOrderRequest) ([
 	})
 
 	return orders, nil
+}
+
+func viewOfStatus(status int) string {
+	switch status {
+	case gophermart.StatusNew:
+		return StatusNew
+	case gophermart.StatusProcessing:
+		return StatusProcessing
+	case gophermart.StatusInvalid:
+		return StatusInvalid
+	case gophermart.StatusProcessed:
+		return StatusProcessed
+	default:
+		return ""
+	}
 }
 
 func (s OrderService) Close() {
@@ -137,9 +152,9 @@ func (s OrderService) runChecker(ctx context.Context, job checkJob) {
 		status := defineStatus(result)
 
 		upDtp := gophermart.OrderUpdateRequest{
-			UserID: job.userID,
-			Number: job.number,
-			Status: status,
+			UserID:  job.userID,
+			Number:  job.number,
+			Status:  status,
 			Accrual: result.Accrual,
 		}
 
