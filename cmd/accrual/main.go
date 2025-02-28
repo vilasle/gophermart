@@ -73,7 +73,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	em := calculation.NewEventManager(ctx)
 	defer em.Stop()
@@ -89,6 +90,9 @@ func main() {
 	go run(server, s)
 
 	<-s
+
+	shutdown(ctx, server)
+
 }
 
 func initLogger(args cliArgs) {
@@ -164,6 +168,17 @@ func run(server *http.Server, sigint chan os.Signal) {
 	}
 	sigint <- os.Interrupt
 
+}
+
+func shutdown(ctx context.Context, server *http.Server) {
+	newCtx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+
+	if err := server.Shutdown(newCtx); err != nil {
+		logger.Error("server shutdown failed", "error", err)
+	} else {
+		logger.Info("server stopped gracefully")
+	} 
 }
 
 func signalSubscription() chan os.Signal {

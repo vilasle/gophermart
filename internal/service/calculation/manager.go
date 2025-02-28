@@ -75,6 +75,9 @@ func (em *EventManager) start(ctx context.Context) {
 }
 
 func (em *EventManager) Stop() {
+	if em.Stopped() {
+		return
+	}
 	em.state.Store(true)
 	close(em.events)
 }
