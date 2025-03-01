@@ -89,7 +89,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctrl := newController(dbRep, accrualURL)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctrl := newController(ctx, dbRep, accrualURL)
 	defer ctrl.OrderSvc.Close()
 
 	mux := newMux(ctrl)
@@ -102,8 +105,6 @@ func main() {
 	go run(server, s)
 
 	<-s
-
-	ctx := context.Background()
 
 	shutdown(ctx, server)
 }
@@ -133,7 +134,7 @@ func checkArgs(args cliArgs) error {
 	return errors.Join(errs...)
 }
 
-func newController(pgRepository pgRep.PostgresqlGophermartRepository, accrualURL *url.URL) gophermart.Controller {
+func newController(ctx context.Context, pgRepository pgRep.PostgresqlGophermartRepository, accrualURL *url.URL) gophermart.Controller {
 	withdrawalSvc := withdrawal.NewWithdrawalService(pgRepository)
 
 	authSvc := authorization.NewAuthorizationService(pgRepository)
@@ -142,7 +143,13 @@ func newController(pgRepository pgRep.PostgresqlGophermartRepository, accrualURL
 		httpRep.NewAccrualRepository(accrualURL),
 	)
 
-	orderSvc := order.NewOrderService(pgRepository, accrualSvc, pgRepository)
+	orderSvc := order.NewOrderService(ctx, order.OrderServiceConfig{
+		OrderRepository:        pgRepository,
+		AccrualService:         accrualSvc,
+		WithdrawalRepository:   pgRepository,
+		RetryOnError:           time.Second * 10,
+		AttemptsGettingAccrual: 3,
+	})
 
 	return gophermart.Controller{
 		AuthSvc:     authSvc,

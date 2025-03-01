@@ -54,14 +54,14 @@ func TestWithdrawalService_Withdraw(t *testing.T) {
 				ctx: context.Background(),
 				dto: service.WithdrawalRequest{
 					UserID:      "123456",
-					OrderNumber: "954323",
+					OrderNumber: "31048580869",
 					Sum:         100,
 				},
 			},
 			mockSetting: mockSetting{
 				dtoIn: gophermart.WithdrawalRequest{
 					UserID:      "123456",
-					OrderNumber: "954323",
+					OrderNumber: "31048580869",
 					Sum:         100,
 				},
 				errOut: gophermart.ErrNotEnoughPoints,
@@ -77,14 +77,14 @@ func TestWithdrawalService_Withdraw(t *testing.T) {
 				ctx: context.Background(),
 				dto: service.WithdrawalRequest{
 					UserID:      "123456",
-					OrderNumber: "954323",
+					OrderNumber: "31048580869",
 					Sum:         100,
 				},
 			},
 			mockSetting: mockSetting{
 				dtoIn: gophermart.WithdrawalRequest{
 					UserID:      "123456",
-					OrderNumber: "954323",
+					OrderNumber: "31048580869",
 					Sum:         100,
 				},
 				errOut: repErr,
@@ -100,14 +100,14 @@ func TestWithdrawalService_Withdraw(t *testing.T) {
 				ctx: context.Background(),
 				dto: service.WithdrawalRequest{
 					UserID:      "123456",
-					OrderNumber: "954323",
+					OrderNumber: "31048580869",
 					Sum:         100,
 				},
 			},
 			mockSetting: mockSetting{
 				dtoIn: gophermart.WithdrawalRequest{
 					UserID:      "123456",
-					OrderNumber: "954323",
+					OrderNumber: "31048580869",
 					Sum:         100,
 				},
 				errOut: nil,

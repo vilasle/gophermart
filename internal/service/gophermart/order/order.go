@@ -35,14 +35,23 @@ type OrderService struct {
 	attemptsGettingAccrual int
 }
 
-func NewOrderService(rep gophermart.OrderRepository, accrual service.AccrualService, repTx gophermart.WithdrawalRepository) OrderService {
+type OrderServiceConfig struct {
+	gophermart.OrderRepository
+	service.AccrualService
+	gophermart.WithdrawalRepository
+	RetryOnError		   time.Duration
+	AttemptsGettingAccrual int
+}
+
+
+func NewOrderService(ctx context.Context, config OrderServiceConfig) OrderService {
 	s := OrderService{
-		rep:                    rep,
-		repTx:                  repTx,
-		accrual:                accrual,
+		rep:                    config.OrderRepository,
+		repTx:                  config.WithdrawalRepository,
+		accrual:                config.AccrualService,
 		jobs:                   make(chan checkJob),
-		retryOnError:           time.Second * 10,
-		attemptsGettingAccrual: 2,
+		retryOnError:           config.RetryOnError,
+		attemptsGettingAccrual: config.AttemptsGettingAccrual,
 	}
 
 	go s.runCheckerDirector()
