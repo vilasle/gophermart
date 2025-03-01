@@ -17,6 +17,7 @@ type OrderService interface {
 	Register(context.Context, RegisterOrderRequest) error
 	//can return undefined error
 	List(context.Context, ListOrderRequest) ([]OrderInfo, error)
+	Close()
 }
 
 type WithdrawalService interface {

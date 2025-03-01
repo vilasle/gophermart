@@ -46,6 +46,7 @@ type OrderUpdateRequest struct {
 type OrderListRequest struct {
 	UserID      string
 	OrderNumber string
+	Status	  int
 }
 
 type OrderInfo struct {

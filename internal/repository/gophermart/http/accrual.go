@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	mart "github.com/vilasle/gophermart/internal/repository/gophermart"
@@ -37,7 +38,8 @@ func (r AccrualRepository) AccrualByOrder(ctx context.Context, dto mart.AccrualR
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return mart.AccrualInfo{}, service.ErrLimit
+		err := createLimitError(resp)
+		return mart.AccrualInfo{}, err
 	} else if resp.StatusCode == http.StatusNoContent {
 		return mart.AccrualInfo{}, service.ErrEntityDoesNotExists
 	} else if resp.StatusCode != http.StatusOK {
@@ -66,4 +68,15 @@ func (r AccrualRepository) AccrualByOrder(ctx context.Context, dto mart.AccrualR
 	}, nil
 }
 
-// ...)
+func createLimitError(resp *http.Response) error {
+	retry := resp.Header.Get("Retry-After")
+	if retry == "" {
+		return service.ErrLimit
+	}
+	if pause, err := strconv.Atoi(retry); err == nil {
+		return service.LimitError{
+			RetryAfter: time.Duration(pause) * time.Second,
+		}
+	}
+	return service.ErrLimit
+}

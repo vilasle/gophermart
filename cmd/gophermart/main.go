@@ -90,6 +90,7 @@ func main() {
 	}
 
 	ctrl := newController(dbRep, accrualURL)
+	defer ctrl.OrderSvc.Close()
 
 	mux := newMux(ctrl)
 

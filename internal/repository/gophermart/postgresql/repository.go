@@ -188,6 +188,10 @@ func (r PostgresqlGophermartRepository) List(ctx context.Context, dto mart.Order
 		sp.Where(sp.Equal("user_id", dto.UserID))
 	}
 
+	if dto.Status > 0 {
+		sp.Where(sp.Equal("status", dto.Status))
+	}
+
 	txt, args := sp.BuildWithFlavor(sqlbuilder.PostgreSQL)
 	rows, err := r.db.QueryContext(ctx, txt, args...)
 	if err != nil {
