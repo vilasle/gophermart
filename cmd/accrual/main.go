@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httprate"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/spf13/pflag"
 
@@ -140,6 +141,8 @@ func newMux(ctrl accrual.Controller) *chi.Mux {
 	mux.Use(_middleware.Logger)
 	mux.Use(middleware.Recoverer)
 
+	mux.Use(httprate.Limit(30, time.Minute))
+
 	mux.Method(http.MethodGet, "/api/orders/{number}", ctrl.OrderInfo())
 	mux.Method(http.MethodGet, "/orders/{number}", ctrl.OrderInfo())
 	mux.Method(http.MethodPost, "/api/orders", ctrl.RegisterOrder())
@@ -178,7 +181,7 @@ func shutdown(ctx context.Context, server *http.Server) {
 		logger.Error("server shutdown failed", "error", err)
 	} else {
 		logger.Info("server stopped gracefully")
-	} 
+	}
 }
 
 func signalSubscription() chan os.Signal {

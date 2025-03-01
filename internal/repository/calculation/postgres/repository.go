@@ -89,6 +89,7 @@ func (r CalculationRepository) Calculations(ctx context.Context, dto decl.Calcul
 	if err != nil {
 		return nil, getRepositoryError(err)
 	}
+	defer rows.Close()
 
 	result := make([]decl.CalculationInfo, 0)
 	for rows.Next() {
@@ -110,7 +111,7 @@ func (r CalculationRepository) AddRules(ctx context.Context, dto ...decl.AddingR
 	}
 	txt, args := sp.BuildWithFlavor(sqlbuilder.PostgreSQL)
 	row := r.db.QueryRowContext(ctx, txt, args...)
-	
+
 	err = row.Scan(&id)
 
 	return id, getRepositoryError(err)
