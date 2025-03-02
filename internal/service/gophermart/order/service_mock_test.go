@@ -102,6 +102,18 @@ func (m *MockOrderService) EXPECT() *MockOrderServiceMockRecorder {
 	return m.recorder
 }
 
+// Close mocks base method.
+func (m *MockOrderService) Close() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Close")
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockOrderServiceMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockOrderService)(nil).Close))
+}
+
 // List mocks base method.
 func (m *MockOrderService) List(arg0 context.Context, arg1 service.ListOrderRequest) ([]service.OrderInfo, error) {
 	m.ctrl.T.Helper()

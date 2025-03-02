@@ -6,6 +6,7 @@ import "context"
 type CalculationRepository interface {
 	AddCalculationToQueue(context.Context, ...AddingCalculation) error
 	ClearCalculationsQueue(context.Context, ClearingCalculationQueue) error
+	GetCalculationsQueue(context.Context) ([]CalculationQueueInfo, error)
 
 	AddCalculationResult(context.Context, AddCalculationResult) error
 	UpdateCalculationResult(context.Context, AddCalculationResult) error

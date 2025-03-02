@@ -6,6 +6,7 @@ import (
 	"math"
 	"regexp"
 	"sync"
+	"time"
 
 	wrap "github.com/pkg/errors"
 
@@ -40,9 +41,54 @@ func NewCalculationService(config CalculationServiceConfig) *CalculationService 
 	s.manager.RegisterHandler(NewOrder, s.calculateOrder)
 	s.manager.RegisterHandler(NewRule, s.readRule)
 
-	s.readAllRules()
-	//TODO if in repository there are rows in queue need to raise events
 	return s
+}
+
+func (c CalculationService) Start(ctx context.Context) error {
+	c.readAllRules(ctx)
+	if err := c.runNotProcessedOrders(ctx); err != nil {
+		return errors.Join(err, errors.New("failed to run not processed orders"))
+	}
+	return nil
+}
+
+func (c CalculationService) runNotProcessedOrders(ctx context.Context) error {
+	newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	queue, err := c.repCalc.GetCalculationsQueue(newCtx)
+	if err != nil {
+		return err
+	}
+
+	orders := prepareQueueToSuitableDto(queue)
+	for _, order := range orders {
+		c.manager.RaiseEvent(NewOrder, order)
+	}
+	return nil
+}
+
+func prepareQueueToSuitableDto(dto []repository.CalculationQueueInfo) []service.RegisterCalculationRequest {
+	m := make(map[string][]service.ProductRow)
+	for _, v := range dto {
+		if _, ok := m[v.OrderNumber]; !ok {
+			m[v.OrderNumber] = make([]service.ProductRow, 0)
+		}
+
+		m[v.OrderNumber] = append(m[v.OrderNumber], service.ProductRow{
+			Name:  v.ProductName,
+			Price: v.Price,
+		})
+	}
+
+	result := make([]service.RegisterCalculationRequest, 0, len(m))
+	for k, v := range m {
+		result = append(result, service.RegisterCalculationRequest{
+			OrderNumber: k,
+			Products:    v,
+		})
+	}
+	return result
 }
 
 func (c CalculationService) Register(ctx context.Context, dto service.RegisterCalculationRequest) error {
@@ -104,7 +150,7 @@ func (c CalculationService) fillCalculatedInfo(dto repository.CalculationInfo) s
 	return service.CalculationInfo{
 		OrderNumber: dto.OrderNumber,
 		Status:      c.statusView(dto.Status),
-		Accrual:     math.Round(dto.Value*100)/100,
+		Accrual:     math.Round(dto.Value*100) / 100,
 	}
 }
 
@@ -193,8 +239,8 @@ func (c CalculationService) fillCalculatedDto(orderNumber string, value float64)
 	}
 }
 
-func (c CalculationService) readAllRules() error {
-	rs, err := c.repRules.Rules(context.Background(), repository.RuleFilter{})
+func (c CalculationService) readAllRules(ctx context.Context) error {
+	rs, err := c.repRules.Rules(ctx, repository.RuleFilter{})
 	if err != nil {
 
 		return err

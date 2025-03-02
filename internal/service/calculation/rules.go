@@ -53,7 +53,6 @@ func (s RuleService) Register(ctx context.Context, dto service.RegisterCalculati
 	s.manager.RaiseEvent(NewRule, id)
 
 	return nil
-
 }
 
 type rule struct {

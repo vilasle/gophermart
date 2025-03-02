@@ -80,7 +80,12 @@ func main() {
 	em := calculation.NewEventManager(ctx)
 	defer em.Stop()
 
-	mux := newMux(newController(repository, em))
+	ctrl, err := newController(ctx, repository, em)
+	if err != nil {
+		logger.Error("can not init calculation controller", "error", err)
+		os.Exit(1)
+	}
+	mux := newMux(ctrl)
 
 	server := newServer(mux, args.addr)
 	defer server.Close()
@@ -93,7 +98,6 @@ func main() {
 	<-s
 
 	shutdown(ctx, server)
-
 }
 
 func initLogger(args cliArgs) {
@@ -116,7 +120,7 @@ func checkArgs(args cliArgs) error {
 	return errors.Join(errs...)
 }
 
-func newController(repository cRep.CalculationRepository, eventManager *calculation.EventManager) accrual.Controller {
+func newController(ctx context.Context, repository cRep.CalculationRepository, eventManager *calculation.EventManager) (accrual.Controller, error) {
 	ruleSvc := calculation.NewRuleService(calculation.RuleServiceConfig{
 		Repository:   repository,
 		EventManager: eventManager,
@@ -128,10 +132,14 @@ func newController(repository cRep.CalculationRepository, eventManager *calculat
 		EventManager:          eventManager,
 	})
 
+	if err := calcSvc.Start(ctx); err != nil {
+		return accrual.Controller{}, err
+	}
+
 	return accrual.Controller{
 		CalculationService:     calcSvc,
 		CalculationRuleService: ruleSvc,
-	}
+	}, nil
 }
 
 func newMux(ctrl accrual.Controller) *chi.Mux {

@@ -134,9 +134,6 @@ func (r PostgresqlGophermartRepository) Transactions(ctx context.Context, dto ma
 	if err != nil {
 		return nil, err
 	}
-	if rows.Err() != nil {
-		return nil, getRepositoryError(rows.Err())
-	}
 	defer rows.Close()
 
 	transactions := make([]mart.Transaction, 0)
@@ -149,7 +146,7 @@ func (r PostgresqlGophermartRepository) Transactions(ctx context.Context, dto ma
 		}
 		transactions = append(transactions, transaction)
 	}
-	return transactions, nil
+	return transactions, getRepositoryError(rows.Err())
 }
 
 // OrderRepository

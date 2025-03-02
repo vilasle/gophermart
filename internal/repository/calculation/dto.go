@@ -28,6 +28,16 @@ type ClearingCalculationQueue struct {
 	OrderNumber string
 }
 
+type CalculationQueue struct {
+	OrderNumber string
+}
+
+type CalculationQueueInfo struct {
+	OrderNumber string
+	ProductName string
+	Price       float64
+}
+
 type AddCalculationResult struct {
 	OrderNumber string
 	Status      int

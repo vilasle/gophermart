@@ -385,7 +385,7 @@ func TestCalculationService_readAllRules(t *testing.T) {
 				manager:  tt.fields.manager,
 			}
 
-			err := c.readAllRules()
+			err := c.readAllRules(tt.args.ctx)
 
 			if tt.wantErr {
 				assert.Error(t, err, "readAllRules() should return an error")
