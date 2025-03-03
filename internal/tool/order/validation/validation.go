@@ -1,6 +1,16 @@
 package validation
 
-func ValidNumber(number int) bool {
+import "strconv"
+
+func IsValidNumber(number string) bool {
+	n, err := strconv.Atoi(number)
+	if err != nil {
+		return false
+	}
+	return validNumber(n)
+}
+
+func validNumber(number int) bool {
 	result := checksum(number / 10)
 
 	return (number%10+result)%10 == 0

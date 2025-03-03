@@ -5,7 +5,6 @@ import (
 	"errors"
 	"math"
 	"sort"
-	"strconv"
 
 	"github.com/vilasle/gophermart/internal/repository/gophermart"
 	"github.com/vilasle/gophermart/internal/service"
@@ -25,10 +24,10 @@ func (s WithdrawalService) Withdraw(ctx context.Context, dto service.WithdrawalR
 		return service.ErrInvalidFormat
 	}
 
-	if !isValidNumber(dto.OrderNumber) {
+	if !validation.IsValidNumber(dto.OrderNumber) {
 		return service.ErrWrongNumberOfOrder
 	}
-	
+
 	err := s.rep.Expense(ctx, gophermart.WithdrawalRequest{
 		UserID:      dto.UserID,
 		OrderNumber: dto.OrderNumber,
@@ -40,14 +39,6 @@ func (s WithdrawalService) Withdraw(ctx context.Context, dto service.WithdrawalR
 	}
 
 	return err
-}
-
-func isValidNumber(number string) bool {
-	n, err := strconv.Atoi(number)
-	if err != nil {
-		return false
-	}
-	return validation.ValidNumber(n)
 }
 
 func (s WithdrawalService) List(ctx context.Context, dto service.WithdrawalListRequest) ([]service.WithdrawalInfo, error) {

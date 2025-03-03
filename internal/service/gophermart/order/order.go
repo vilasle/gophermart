@@ -2,9 +2,7 @@ package order
 
 import (
 	"context"
-	"errors"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/vilasle/gophermart/internal/logger"
@@ -20,12 +18,6 @@ const (
 	StatusProcessed  = "PROCESSED"
 )
 
-type checkJob struct {
-	userID   string
-	number   string
-	attempts int
-}
-
 type OrderService struct {
 	rep                    gophermart.OrderRepository
 	repTx                  gophermart.WithdrawalRepository
@@ -39,10 +31,9 @@ type OrderServiceConfig struct {
 	gophermart.OrderRepository
 	service.AccrualService
 	gophermart.WithdrawalRepository
-	RetryOnError		   time.Duration
+	RetryOnError           time.Duration
 	AttemptsGettingAccrual int
 }
-
 
 func NewOrderService(ctx context.Context, config OrderServiceConfig) OrderService {
 	s := OrderService{
@@ -69,24 +60,11 @@ func (s OrderService) Register(ctx context.Context, dto service.RegisterOrderReq
 		return service.ErrInvalidFormat
 	}
 
-	n, err := strconv.Atoi(dto.Number)
-	if err != nil {
+	if !validation.IsValidNumber(dto.Number) {
 		return service.ErrWrongNumberOfOrder
 	}
 
-	if !validation.ValidNumber(n) {
-		return service.ErrWrongNumberOfOrder
-	}
-
-	rld := gophermart.OrderListRequest{
-		OrderNumber: dto.Number,
-	}
-	if result, err := s.rep.List(ctx, rld); err == nil && len(result) > 0 {
-		if result[0].UserID == dto.UserID {
-			return service.ErrWasUploadEarly
-		}
-		return service.ErrDuplicate
-	} else if err != nil {
+	if err := s.checkDuplicate(ctx, dto); err != nil {
 		return err
 	}
 
@@ -98,7 +76,27 @@ func (s OrderService) Register(ctx context.Context, dto service.RegisterOrderReq
 	if err := s.rep.Create(ctx, rdt); err != nil {
 		return err
 	}
-	s.jobs <- checkJob{number: dto.Number, userID: dto.UserID, attempts: s.attemptsGettingAccrual}
+
+	s.startChecker(0, checkJob{
+		number:   dto.Number,
+		userID:   dto.UserID,
+		attempts: s.attemptsGettingAccrual,
+	})
+
+	return nil
+}
+
+func (s OrderService) checkDuplicate(ctx context.Context, dto service.RegisterOrderRequest) error {
+	rld := gophermart.OrderListRequest{OrderNumber: dto.Number}
+
+	if result, err := s.rep.List(ctx, rld); err == nil && len(result) > 0 {
+		if result[0].UserID == dto.UserID {
+			return service.ErrWasUploadEarly
+		}
+		return service.ErrDuplicate
+	} else if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -190,49 +188,11 @@ func (s OrderService) runChecker(ctx context.Context, job checkJob) {
 		return
 	default:
 		result, err := s.getAccrualInformationByOrder(ctx, job.number)
-		if err != nil {
-			retry := s.handlerAccrualError(&job, err)
 
-			if job.attempts == 0 {
-				if err := s.postOrderState(ctx, job, gophermart.StatusInvalid, 0); err != nil {
-					logger.Error("updating order status was failed", "error", err)
-				}
-				return
-			}
-			s.restartChecker(retry, job)
-
-			return
-		}
-
-		if err := s.postOrderState(ctx, job, defineStatus(result), result.Accrual); err != nil {
-			logger.Error("updating order status was failed", "error", err)
-			return
-		}
-
-		if result.Status == StatusProcessed {
-			if err := s.postTransaction(ctx, job, result.Accrual); err != nil {
-				logger.Error("adding income to user balance was failed", "error", err)
-				return
-			}
-		}
-
-		if result.Status == StatusProcessing {
-			s.restartChecker(s.retryOnError, job)
+		for _, action := range createActions(result, job, err) {
+			action.exec(ctx, &s)
 		}
 	}
-}
-
-func defineStatus(result service.AccrualsInfo) int {
-	switch result.Status {
-	case StatusProcessing:
-		return gophermart.StatusProcessing
-	case StatusInvalid:
-		return gophermart.StatusInvalid
-	case StatusProcessed:
-		return gophermart.StatusProcessed
-	}
-
-	return gophermart.StatusNew
 }
 
 func (s OrderService) getAccrualInformationByOrder(ctx context.Context, orderNumber string) (result service.AccrualsInfo, err error) {
@@ -244,7 +204,7 @@ func (s OrderService) getAccrualInformationByOrder(ctx context.Context, orderNum
 	})
 }
 
-func (s OrderService) restartChecker(retry time.Duration, job checkJob) {
+func (s OrderService) startChecker(retry time.Duration, job checkJob) {
 	time.AfterFunc(retry, func() {
 		s.jobs <- job
 	})
@@ -271,29 +231,4 @@ func (s OrderService) postTransaction(ctx context.Context, job checkJob, accrual
 		Sum:         accrual,
 	}
 	return s.repTx.Income(ctx, inDto)
-}
-
-func (s OrderService) handlerAccrualError(job *checkJob, err error) time.Duration {
-	logger.Error("getting information from accrual service was failed", "error", err)
-
-	var limitErr *service.LimitError
-	retry := s.retryOnError
-
-	if errors.As(err, &limitErr) {
-		retry = limitErr.RetryAfter
-		logger.Error("accrual service is overloaded, restart task",
-			"order", job.number,
-			"retryAfter", retry)
-	} else if errors.Is(err, service.ErrEntityDoesNotExists) {
-		job.attempts--
-		logger.Error("order does not exist on accrual service, may be it will be later, restart task",
-			"order", job.number,
-			"retryAfter", retry)
-	} else {
-		logger.Error("may by accrual service is not available, restart task",
-			"order", job.number,
-			"retryAfter", retry)
-	}
-	return retry
-
 }
