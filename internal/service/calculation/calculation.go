@@ -3,7 +3,6 @@ package calculation
 import (
 	"context"
 	"errors"
-	"math"
 	"regexp"
 	"sync"
 	"time"
@@ -54,7 +53,7 @@ func (c CalculationService) Start(ctx context.Context) error {
 
 func (c CalculationService) Register(ctx context.Context, dto service.RegisterCalculationRequest) error {
 	//save on db; line on table need for unexpected finishing service
-	addingQueueDto, addingCalc := c.prepareAddingDto(dto)
+	addingQueueDto, addingCalc := prepareAddingDto(dto)
 
 	if err := c.repCalc.AddCalculationResult(ctx, addingCalc); err != nil {
 		return err
@@ -82,10 +81,10 @@ func (c CalculationService) Calculation(ctx context.Context, dto service.Calcula
 		return service.CalculationInfo{}, service.ErrEntityDoesNotExists
 	}
 
-	return c.fillCalculatedInfo(result[0]), nil
+	return prepareCalculatedInfo(result[0]), nil
 }
 
-// events
+// EVENTS
 //
 // event.Type = NewRule; event.Data = id rule on repository
 func (c CalculationService) readRule(ctx context.Context, event Event) {
@@ -177,14 +176,6 @@ func (c CalculationService) runNotProcessedOrders(ctx context.Context) error {
 	return nil
 }
 
-func (c CalculationService) fillCalculatedInfo(dto repository.CalculationInfo) service.CalculationInfo {
-	return service.CalculationInfo{
-		OrderNumber: dto.OrderNumber,
-		Status:      statusView(dto.Status),
-		Accrual:     math.Round(dto.Value*100) / 100,
-	}
-}
-
 func (c CalculationService) calculateProduct(product service.ProductRow) float64 {
 	c.mxRules.Lock()
 	defer c.mxRules.Unlock()
@@ -233,74 +224,4 @@ func (c *CalculationService) fillRules(rs []repository.RuleInfo) error {
 	return errors.Join(errs...)
 }
 
-func statusView(status repository.CalculationStatus) string {
-	switch status {
-	case repository.Invalid:
-		return "INVALID"
-	case repository.Processing:
-		return "PROCESSING"
-	case repository.Processed:
-		return "PROCESSED"
-	default:
-		return ""
-	}
-}
 
-// dto
-func prepareCalculatedDto(orderNumber string, value float64) repository.AddCalculationResult {
-	status := repository.Invalid
-	if value > 0 {
-		status = repository.Processed
-	}
-
-	return repository.AddCalculationResult{
-		OrderNumber: orderNumber,
-		Value:       math.Round(value*100) / 100,
-		Status:      status,
-	}
-}
-
-func prepareQueueToExpectedDto(dto []repository.CalculationQueueInfo) []service.RegisterCalculationRequest {
-	m := make(map[string][]service.ProductRow)
-	for _, v := range dto {
-		if _, ok := m[v.OrderNumber]; !ok {
-			m[v.OrderNumber] = make([]service.ProductRow, 0)
-		}
-
-		m[v.OrderNumber] = append(m[v.OrderNumber], service.ProductRow{
-			Name:  v.ProductName,
-			Price: v.Price,
-		})
-	}
-
-	result := make([]service.RegisterCalculationRequest, 0, len(m))
-	for k, v := range m {
-		result = append(result, service.RegisterCalculationRequest{
-			OrderNumber: k,
-			Products:    v,
-		})
-	}
-	return result
-}
-
-func (c CalculationService) prepareAddingDto(dto service.RegisterCalculationRequest) ([]repository.AddingCalculation, repository.AddCalculationResult) {
-	addingDto := make([]repository.AddingCalculation, 0, len(dto.Products))
-
-	orderNumber := dto.OrderNumber
-
-	for _, product := range dto.Products {
-		addingDto = append(addingDto, repository.AddingCalculation{
-			OrderNumber: orderNumber,
-			ProductName: product.Name,
-			Price:       product.Price,
-		})
-	}
-
-	calcDto := repository.AddCalculationResult{
-		OrderNumber: orderNumber,
-		Status:      repository.Registered,
-		Value:       0,
-	}
-
-	return addingDto, calcDto
-}
