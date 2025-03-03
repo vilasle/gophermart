@@ -50,6 +50,7 @@ func getEnv(key, fallback string) string {
 	return result
 }
 
+// service receive order info(order and products), calculate bonus by rules and give information about results
 func main() {
 	args := initCli()
 
@@ -77,6 +78,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	//transport for distribution event to subscribers
 	em := calculation.NewEventManager()
 	em.Start(ctx)
 	defer em.Stop()
@@ -90,14 +92,15 @@ func main() {
 
 	server := newServer(mux, args.addr)
 	defer server.Close()
-
+	
+	//catch SIGINT
 	s := signalSubscription()
 
 	logger.Info("run server", "addr", args.addr)
 	go run(server, s)
 
 	<-s
-
+	
 	shutdown(ctx, server)
 }
 
@@ -122,11 +125,13 @@ func checkArgs(args cliArgs) error {
 }
 
 func newController(ctx context.Context, repository cRep.CalculationRepository, eventManager *calculation.EventManager) (accrual.Controller, error) {
+	//uploading new rules
 	ruleSvc := calculation.NewRuleService(calculation.RuleServiceConfig{
 		Repository:   repository,
 		EventManager: eventManager,
 	})
 
+	//main service. Role is registration order, calculation of bonus and report of result by request
 	calcSvc := calculation.NewCalculationService(calculation.CalculationServiceConfig{
 		CalculationRepository: repository,
 		CalculationRules:      repository,
@@ -149,7 +154,7 @@ func newMux(ctrl accrual.Controller) *chi.Mux {
 	mux.Use(middleware.RequestID)
 	mux.Use(_middleware.Logger)
 	mux.Use(middleware.Recoverer)
-
+	//limiter of requests
 	mux.Use(httprate.Limit(30, time.Minute))
 
 	mux.Method(http.MethodGet, "/api/orders/{number}", ctrl.OrderInfo())

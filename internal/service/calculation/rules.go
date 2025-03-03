@@ -33,7 +33,6 @@ func (s RuleService) Register(ctx context.Context, dto service.RegisterCalculati
 	//to be sure that exp is correct
 	_, err := regexp.Compile(exp)
 	if err != nil {
-		//TODO wrap error
 		return err
 	}
 

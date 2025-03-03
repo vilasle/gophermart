@@ -18,19 +18,10 @@ type contextKey string
 const UserIDKey contextKey = "userID"
 const CookieKey string = "token"
 
-// ///////////////////////////// MODELS //////////////////////////////////////////////////////
-// Claims — структура утверждений, которая включает стандартные утверждения и
-// одно пользовательское UserID
 type JWTClaims struct {
 	jwt.RegisteredClaims
 	UserID string
 }
-
-// TODO: the logic
-// 1. Проверка на наличие userID вообще, на валидность
-// 2. Проверка expiration date, если она истекла, то прошу сервис сгенерить новый userID, генерю token, отдаю в куку
-// 3. Проверка userID в сервисе. Если ОК => передаю упр хэндлеру, НЕ ОК => unathorized
-// 4.
 
 func JWTMiddleware(some ...service.AuthorizationService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -48,8 +39,6 @@ func JWTMiddleware(some ...service.AuthorizationService) func(http.Handler) http
 				return
 			}
 
-			// ИЗВЛЕКАЮ userID
-			// создаём экземпляр структуры с утверждениями
 			claims := &JWTClaims{}
 			
 			// парсим из строки токена tokenString в структуру claims

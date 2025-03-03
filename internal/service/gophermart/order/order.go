@@ -47,7 +47,7 @@ func NewOrderService(ctx context.Context, config OrderServiceConfig) OrderServic
 
 	go s.runCheckerDirector()
 
-	err := s.runNotProcessedOrders(context.Background())
+	err := s.runNotProcessedOrders(ctx)
 	if err != nil {
 		logger.Error("run not processed jobs was failed", "error", err)
 	}

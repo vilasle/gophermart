@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/vilasle/gophermart/internal/logger"
 )
 
 type compressWriter struct {
@@ -35,13 +37,10 @@ func (c *compressWriter) WriteHeader(statusCode int) {
 	c.w.WriteHeader(statusCode)
 }
 
-// Close закрывает gzip.Writer и досылает все данные из буфера.
 func (c *compressWriter) Close() error {
 	return c.zw.Close()
 }
 
-// compressReader implements interface io.ReadCloser и позволяет прозрачно для сервера
-// декомпрессировать получаемые от клиента данные
 type compressReader struct {
 	r  io.ReadCloser
 	zr *gzip.Reader
@@ -72,25 +71,28 @@ func (c *compressReader) Close() error {
 
 func GzMW(h http.Handler) http.Handler {
 	gzipFunc := func(res http.ResponseWriter, req *http.Request) {
+		log := logger.GetRequestLogger(req)
+
 		// copy original request
 		or := req
+
 		// check, that the client has sent to the server compressed data in gzip format
 		contentEncoding := req.Header.Get("Content-Encoding")
 		sendsGzip := strings.Contains(contentEncoding, "gzip")
 		if sendsGzip {
 			fmt.Println("[INFO] Content-Encoding is gzip")
 			if !(strings.Contains(req.Header.Get("Content-Type"), "application/json") || strings.Contains(req.Header.Get("Content-Type"), "text/html")) {
-				//GzipLogger.logger.Info("[INFO]", zap.String("[INFO]", "gzip IS NOT supported by the client!"), zap.String("method", req.Method), zap.String("url", req.URL.Path))
-				fmt.Println("Unacceptable Content-Type => continue without gzip")
-				//  continue without gzip
+
+				log.Info("Unacceptable Content-Type => continue without gzip")
+
 				h.ServeHTTP(res, or)
 				return
 			}
-			// проверяем, что клиент умеет получать от сервера сжатые данные в формате gzip
-			acceptEncoding := req.Header.Get("Accept-Encoding") // это выставляет клиент
+
+			acceptEncoding := req.Header.Get("Accept-Encoding")
 			supportsGzip := strings.Contains(acceptEncoding, "gzip")
 			if !supportsGzip {
-				// continue without gzip
+
 				h.ServeHTTP(res, or)
 				return
 			}
@@ -98,23 +100,21 @@ func GzMW(h http.Handler) http.Handler {
 			// wrap request body into io.Reader with decompression available
 			cr, err := newCompressReader(req.Body)
 			if err != nil {
-				fmt.Println(err)
-				fmt.Println("[ERROR] 500")
+				log.Error("can not decompress request", "error", err)
 				res.WriteHeader(http.StatusInternalServerError)
-				// TODO mb I should call handler with original res and req here?
 				return
 			}
-			// меняем тело запроса на новое
+
 			req.Body = cr
 			defer cr.Close()
 		}
 
-		// оборачиваем оригинальный http.ResponseWriter новым с поддержкой сжатия
-		cres := newCompressWriter(res)
-		// не забываем отправить клиенту все сжатые данные после завершения middleware
-		defer cres.Close()
+		compressedResponse := newCompressWriter(res)
+
+		defer compressedResponse.Close()
+
 		// call handler with modified res and req
-		h.ServeHTTP(cres, req)
+		h.ServeHTTP(compressedResponse, req)
 
 	}
 	return http.HandlerFunc(gzipFunc)

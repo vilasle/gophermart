@@ -36,8 +36,9 @@ func NewCalculationService(config CalculationServiceConfig) *CalculationService 
 		mxRules:  &sync.Mutex{},
 		rules:    make(map[int16]rule),
 	}
-
+	//run calculate bonus by order 	
 	s.manager.RegisterHandler(NewOrder, s.calculateOrder)
+	//add new registered rule on service
 	s.manager.RegisterHandler(NewRule, s.readRule)
 
 	return s
@@ -45,6 +46,7 @@ func NewCalculationService(config CalculationServiceConfig) *CalculationService 
 
 func (c CalculationService) Start(ctx context.Context) error {
 	c.readAllRules(ctx)
+	
 	if err := c.runNotProcessedOrders(ctx); err != nil {
 		return errors.Join(err, errors.New("failed to run not processed orders"))
 	}
