@@ -1,9 +1,12 @@
 module github.com/vilasle/gophermart
 
-go 1.22
+go 1.23
+
+toolchain go1.23.6
 
 require (
 	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/httprate v0.14.1
 	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/golang/mock v1.6.0
 	github.com/huandu/go-sqlbuilder v1.34.0
@@ -16,7 +19,6 @@ require (
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/go-chi/httprate v0.14.1 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

@@ -77,7 +77,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	em := calculation.NewEventManager(ctx)
+	em := calculation.NewEventManager()
+	em.Start(ctx)
 	defer em.Stop()
 
 	ctrl, err := newController(ctx, repository, em)

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	gomock "github.com/golang/mock/gomock"
-	"github.com/vilasle/gophermart/internal/repository/calculation"
+	repository "github.com/vilasle/gophermart/internal/repository/calculation"
 	"github.com/vilasle/gophermart/internal/service"
 )
 
@@ -52,11 +52,12 @@ func TestRuleService_Register(t *testing.T) {
 
 			tt.args.behavior(rep, tt.args.ctx, tt.args.dto, 1)
 
-			em := NewEventManager(tt.args.ctx)
+			em := NewEventManager()
+			em.Start(tt.args.ctx)
 
 			cfg := RuleServiceConfig{
-				Repository: rep,
-				EventManager:     em,
+				Repository:   rep,
+				EventManager: em,
 			}
 
 			s := NewRuleService(cfg)

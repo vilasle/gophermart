@@ -55,7 +55,8 @@ func TestEventManager(t *testing.T) {
 			}
 			ctx, cancel := context.WithCancel(baseCtx)
 			//check starting manager
-			em := NewEventManager(ctx)
+			em := NewEventManager()
+			em.Start(ctx)
 
 			//check registration
 			em.RegisterHandler(NewOrder, fn)

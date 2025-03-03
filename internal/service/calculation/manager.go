@@ -22,20 +22,32 @@ type Event struct {
 }
 
 type EventManager struct {
-	state    atomic.Bool
+	inWork   atomic.Bool
 	events   chan Event
 	handlers map[EventType][]EventHandler
 }
 
-func NewEventManager(ctx context.Context) *EventManager {
+func NewEventManager() *EventManager {
 	eventCap := 64
 	m := &EventManager{
 		events:   make(chan Event, eventCap),
 		handlers: make(map[EventType][]EventHandler),
-		state:    atomic.Bool{},
+		inWork:   atomic.Bool{},
 	}
-	go m.start(ctx)
 	return m
+}
+
+func (em *EventManager) Start(ctx context.Context) {
+	em.inWork.Store(true)
+	go em.start(ctx)
+}
+
+func (em *EventManager) Stop() {
+	if em.Stopped() {
+		return
+	}
+	em.inWork.Store(false)
+	close(em.events)
 }
 
 func (em *EventManager) RaiseEvent(name EventType, data any) {
@@ -48,9 +60,13 @@ func (em *EventManager) RaiseEvent(name EventType, data any) {
 	em.events <- Event{name, data}
 }
 
-func (em *EventManager) Stopped() bool {
-	v := em.state.Load()
+func (em *EventManager) Started() bool {
+	v := em.inWork.Load()
 	return v
+}
+
+func (em *EventManager) Stopped() bool {
+	return !em.Started()
 }
 
 func (em *EventManager) RegisterHandler(event EventType, handler EventHandler) {
@@ -72,14 +88,6 @@ func (em *EventManager) start(ctx context.Context) {
 		}
 	}
 	em.Stop()
-}
-
-func (em *EventManager) Stop() {
-	if em.Stopped() {
-		return
-	}
-	em.state.Store(true)
-	close(em.events)
 }
 
 func (em *EventManager) runHandler(ctx context.Context, event Event, limit chan struct{}) {

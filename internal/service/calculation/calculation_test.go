@@ -56,7 +56,7 @@ func TestCalculationService_fillRules(t *testing.T) {
 				repRules: &MockCalculationRules{},
 				mxRules:  &sync.Mutex{},
 				rules:    make(map[int16]rule),
-				manager:  NewEventManager(context.Background()),
+				manager:  NewEventManager(),
 			},
 			args: args{
 				rs: []repository.RuleInfo{
@@ -83,7 +83,7 @@ func TestCalculationService_fillRules(t *testing.T) {
 				repRules: &MockCalculationRules{},
 				mxRules:  &sync.Mutex{},
 				rules:    make(map[int16]rule),
-				manager:  NewEventManager(context.Background()),
+				manager:  NewEventManager(),
 			},
 			args: args{
 				rs: []repository.RuleInfo{
@@ -104,7 +104,7 @@ func TestCalculationService_fillRules(t *testing.T) {
 				repRules: &MockCalculationRules{},
 				mxRules:  &sync.Mutex{},
 				rules:    make(map[int16]rule),
-				manager:  NewEventManager(context.Background()),
+				manager:  NewEventManager(),
 			},
 			args: args{
 				rs: []repository.RuleInfo{
@@ -128,6 +128,9 @@ func TestCalculationService_fillRules(t *testing.T) {
 				rules:    tt.fields.rules,
 				manager:  tt.fields.manager,
 			}
+
+			tt.fields.manager.Start(context.Background())
+
 			err := c.fillRules(tt.args.rs)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -168,7 +171,7 @@ func TestCalculationService_readRule(t *testing.T) {
 				repCalc: &MockCalculationRepository{},
 				mxRules: &sync.Mutex{},
 				rules:   make(map[int16]rule),
-				manager: NewEventManager(context.Background()),
+				manager: NewEventManager(),
 			},
 			args: args{
 				ctx: context.Background(),
@@ -198,7 +201,7 @@ func TestCalculationService_readRule(t *testing.T) {
 				repCalc: &MockCalculationRepository{},
 				mxRules: &sync.Mutex{},
 				rules:   make(map[int16]rule),
-				manager: NewEventManager(context.Background()),
+				manager: NewEventManager(),
 			},
 			args: args{
 				ctx: context.Background(),
@@ -217,7 +220,7 @@ func TestCalculationService_readRule(t *testing.T) {
 				repCalc: &MockCalculationRepository{},
 				mxRules: &sync.Mutex{},
 				rules:   make(map[int16]rule),
-				manager: NewEventManager(context.Background()),
+				manager: NewEventManager(),
 			},
 			args: args{
 				ctx: context.Background(),
@@ -240,7 +243,7 @@ func TestCalculationService_readRule(t *testing.T) {
 				repCalc: &MockCalculationRepository{},
 				mxRules: &sync.Mutex{},
 				rules:   make(map[int16]rule),
-				manager: NewEventManager(context.Background()),
+				manager: NewEventManager(),
 			},
 			args: args{
 				ctx: context.Background(),
@@ -278,7 +281,7 @@ func TestCalculationService_readRule(t *testing.T) {
 			repRules := NewMockCalculationRules(ctrl)
 
 			tt.args.behavior(repRules, tt.args.ctx, tt.args.dto)
-
+			tt.fields.manager.Start(tt.args.ctx)
 			c := CalculationService{
 				repCalc:  tt.fields.repCalc,
 				repRules: repRules,
@@ -329,7 +332,7 @@ func TestCalculationService_readAllRules(t *testing.T) {
 				repCalc: &MockCalculationRepository{},
 				mxRules: &sync.Mutex{},
 				rules:   make(map[int16]rule),
-				manager: NewEventManager(context.Background()),
+				manager: NewEventManager(),
 			},
 			args: args{
 				ctx: context.Background(),
@@ -354,7 +357,7 @@ func TestCalculationService_readAllRules(t *testing.T) {
 				repCalc: &MockCalculationRepository{},
 				mxRules: &sync.Mutex{},
 				rules:   make(map[int16]rule),
-				manager: NewEventManager(context.Background()),
+				manager: NewEventManager(),
 			},
 			args: args{
 				ctx: context.Background(),
@@ -384,9 +387,10 @@ func TestCalculationService_readAllRules(t *testing.T) {
 				rules:    tt.fields.rules,
 				manager:  tt.fields.manager,
 			}
+			tt.fields.manager.Start(tt.args.ctx)
 
 			err := c.readAllRules(tt.args.ctx)
-
+			
 			if tt.wantErr {
 				assert.Error(t, err, "readAllRules() should return an error")
 			} else {
@@ -421,7 +425,7 @@ func TestCalculationService_fillCalculatedDto(t *testing.T) {
 				repRules: &MockCalculationRules{},
 				mxRules:  &sync.Mutex{},
 				rules:    make(map[int16]rule),
-				manager:  NewEventManager(context.Background()),
+				manager:  NewEventManager(),
 			},
 			args: args{
 				orderNumber: "1234567890",
@@ -440,7 +444,7 @@ func TestCalculationService_fillCalculatedDto(t *testing.T) {
 				repRules: &MockCalculationRules{},
 				mxRules:  &sync.Mutex{},
 				rules:    make(map[int16]rule),
-				manager:  NewEventManager(context.Background()),
+				manager:  NewEventManager(),
 			},
 			args: args{
 				orderNumber: "1234567890",
@@ -455,14 +459,8 @@ func TestCalculationService_fillCalculatedDto(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := CalculationService{
-				repCalc:  tt.fields.repCalc,
-				repRules: tt.fields.repRules,
-				mxRules:  tt.fields.mxRules,
-				rules:    tt.fields.rules,
-				manager:  tt.fields.manager,
-			}
-			if got := c.fillCalculatedDto(tt.args.orderNumber, tt.args.value); !reflect.DeepEqual(got, tt.want) {
+			tt.fields.manager.Start(context.Background())
+			if got := prepareCalculatedDto(tt.args.orderNumber, tt.args.value); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("CalculationService.fillCalculatedDto() = %v, want %v", got, tt.want)
 			}
 		})
@@ -504,7 +502,7 @@ func TestCalculationService_calculateProduct(t *testing.T) {
 						exp:             regexp.MustCompile("(?i)test"),
 					},
 				},
-				manager: NewEventManager(context.Background()),
+				manager: NewEventManager(),
 			},
 			args: args{
 				product: service.ProductRow{
@@ -532,7 +530,7 @@ func TestCalculationService_calculateProduct(t *testing.T) {
 						exp:             regexp.MustCompile("(?i)test"),
 					},
 				},
-				manager: NewEventManager(context.Background()),
+				manager: NewEventManager(),
 			},
 			args: args{
 				product: service.ProductRow{
@@ -593,7 +591,7 @@ func TestCalculationService_calculateOrder(t *testing.T) {
 				exp:             regexp.MustCompile("(?i)test"),
 			},
 		},
-		manager: NewEventManager(context.Background()),
+		manager: NewEventManager(),
 	}
 
 	type result struct {
@@ -735,7 +733,7 @@ func TestCalculationService_calculateOrder(t *testing.T) {
 			rep := NewMockCalculationRepository(ctrl)
 
 			tt.args.behavior(rep, tt.args.ctx, tt.args.dtoAdd, tt.args.dtoClear, tt.args.err)
-
+			tt.fields.manager.Start(context.Background())
 			c := CalculationService{
 				repCalc:  rep,
 				repRules: tt.fields.repRules,
