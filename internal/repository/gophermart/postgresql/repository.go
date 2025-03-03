@@ -93,10 +93,8 @@ func (r PostgresqlGophermartRepository) Expense(ctx context.Context, dto mart.Wi
 	row := tx.QueryRowContext(ctx, txt1, args1...)
 
 	var sum float64
-	if err := row.Scan(&sum); err == nil {
-		if sum < dto.Sum {
-			return mart.ErrNotEnoughPoints
-		}
+	if err := row.Scan(&sum); err == nil && sum < dto.Sum {
+		return mart.ErrNotEnoughPoints
 	} else if err == sql.ErrNoRows {
 		return mart.ErrNotEnoughPoints
 	}
@@ -136,6 +134,12 @@ func (r PostgresqlGophermartRepository) Transactions(ctx context.Context, dto ma
 	}
 	defer rows.Close()
 
+	transactions, err := scanTransactions(rows)
+
+	return transactions, getRepositoryError(err)
+}
+
+func scanTransactions(rows *sql.Rows) ([]mart.Transaction, error) {
 	transactions := make([]mart.Transaction, 0)
 	for rows.Next() {
 		transaction := mart.Transaction{}
@@ -146,7 +150,7 @@ func (r PostgresqlGophermartRepository) Transactions(ctx context.Context, dto ma
 		}
 		transactions = append(transactions, transaction)
 	}
-	return transactions, getRepositoryError(rows.Err())
+	return transactions, nil
 }
 
 // OrderRepository
@@ -203,12 +207,18 @@ func (r PostgresqlGophermartRepository) List(ctx context.Context, dto mart.Order
 
 	defer rows.Close()
 
+	orders, err := scanAsOrdersInfo(rows)
+
+	return orders, getRepositoryError(err)
+}
+
+func scanAsOrdersInfo(rows *sql.Rows) ([]mart.OrderInfo, error) {
 	orders := make([]mart.OrderInfo, 0)
 	for rows.Next() {
 		order := mart.OrderInfo{}
 		err := rows.Scan(&order.UserID, &order.Number, &order.CreatedAt, &order.Status, &order.Accrual)
 		if err != nil {
-			return nil, getRepositoryError(err)
+			return nil, err
 		}
 		orders = append(orders, order)
 	}

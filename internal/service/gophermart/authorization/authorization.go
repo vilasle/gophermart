@@ -19,7 +19,7 @@ func NewAuthorizationService(rep gophermart.AuthorizationRepository) Authorizati
 }
 
 func (svc AuthorizationService) Register(ctx context.Context, dto service.RegisterRequest) (service.UserInfo, error) {
-	if dto.Login == "" || dto.Password == "" {
+	if !checkFillingLoginPassword(dto.Login, dto.Password) {
 		return service.UserInfo{}, service.ErrInvalidFormat
 	}
 	hash := svc.createHash(dto.Password)
@@ -35,18 +35,18 @@ func (svc AuthorizationService) Register(ctx context.Context, dto service.Regist
 		}
 		return service.UserInfo{}, err
 	}
-	return service.UserInfo{
-		ID: result.ID,
-	}, nil
+
+	return service.UserInfo{ID: result.ID}, nil
 }
 
 func (svc AuthorizationService) Authorize(ctx context.Context, dto service.AuthorizeRequest) (service.UserInfo, error) {
-	if dto.Login == "" || dto.Password == "" {
+	if !checkFillingLoginPassword(dto.Login, dto.Password) {
 		return service.UserInfo{}, service.ErrInvalidFormat
 	}
+	
 	hash := svc.createHash(dto.Password)
 	user := gophermart.AuthData{
-		Login:        dto.Login,
+		Login: dto.Login,
 	}
 
 	result, err := svc.rep.CheckUser(ctx, user)
@@ -66,6 +66,13 @@ func (svc AuthorizationService) Authorize(ctx context.Context, dto service.Autho
 	return service.UserInfo{
 		ID: result.ID,
 	}, nil
+}
+
+func checkFillingLoginPassword(login, password string) bool {
+	if login == "" || password == "" {
+		return false
+	}
+	return true
 }
 
 func (svc AuthorizationService) CheckByUserID(ctx context.Context, id string) error {

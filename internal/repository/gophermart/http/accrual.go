@@ -22,19 +22,22 @@ func NewAccrualRepository(addr *url.URL) *AccrualRepository {
 }
 
 func (r AccrualRepository) AccrualByOrder(ctx context.Context, dto mart.AccrualRequest) (mart.AccrualInfo, error) {
-	numberAddr := r.addr.JoinPath("orders", dto.OrderNumber)
+	var (
+		addr = r.addr.JoinPath("orders", dto.OrderNumber).String()
+		cl   = &http.Client{Timeout: 10 * time.Second}
+		req  *http.Request
+		resp *http.Response
+		err  error
+	)
 
-	cl := &http.Client{Timeout: 10 * time.Second}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, numberAddr.String(), nil)
-	if err != nil {
+	if req, err = http.NewRequestWithContext(ctx, http.MethodGet, addr, nil); err != nil {
 		return mart.AccrualInfo{}, err
 	}
 
-	resp, err := cl.Do(req)
-	if err != nil {
+	if resp, err = cl.Do(req); err != nil {
 		return mart.AccrualInfo{}, err
 	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusTooManyRequests {
@@ -51,6 +54,10 @@ func (r AccrualRepository) AccrualByOrder(ctx context.Context, dto mart.AccrualR
 		return mart.AccrualInfo{}, err
 	}
 
+	return prepareAccrualInfo(content)
+}
+
+func prepareAccrualInfo(content []byte) (mart.AccrualInfo, error) {
 	result := struct {
 		Order   string  `json:"order"`
 		Status  string  `json:"status"`

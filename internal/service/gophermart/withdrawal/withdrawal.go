@@ -25,16 +25,11 @@ func (s WithdrawalService) Withdraw(ctx context.Context, dto service.WithdrawalR
 		return service.ErrInvalidFormat
 	}
 
-	n, err := strconv.Atoi(dto.OrderNumber)
-	if err != nil {
+	if !isValidNumber(dto.OrderNumber) {
 		return service.ErrWrongNumberOfOrder
 	}
-
-	if !validation.ValidNumber(n) {
-		return service.ErrWrongNumberOfOrder
-	}
-
-	err = s.rep.Expense(ctx, gophermart.WithdrawalRequest{
+	
+	err := s.rep.Expense(ctx, gophermart.WithdrawalRequest{
 		UserID:      dto.UserID,
 		OrderNumber: dto.OrderNumber,
 		Sum:         dto.Sum,
@@ -47,6 +42,14 @@ func (s WithdrawalService) Withdraw(ctx context.Context, dto service.WithdrawalR
 	return err
 }
 
+func isValidNumber(number string) bool {
+	n, err := strconv.Atoi(number)
+	if err != nil {
+		return false
+	}
+	return validation.ValidNumber(n)
+}
+
 func (s WithdrawalService) List(ctx context.Context, dto service.WithdrawalListRequest) ([]service.WithdrawalInfo, error) {
 	if dto.UserID == "" {
 		return []service.WithdrawalInfo{}, service.ErrInvalidFormat
@@ -56,23 +59,28 @@ func (s WithdrawalService) List(ctx context.Context, dto service.WithdrawalListR
 	if err != nil {
 		return []service.WithdrawalInfo{}, err
 	}
-	result := make([]service.WithdrawalInfo, 0, len(r))
-	for _, h := range r {
-		if h.Income {
+
+	return prepareWithdrawalsInfo(r), nil
+}
+
+func prepareWithdrawalsInfo(transactions []gophermart.Transaction) []service.WithdrawalInfo {
+	result := make([]service.WithdrawalInfo, 0, len(transactions))
+
+	for _, t := range transactions {
+		if t.Income {
 			continue
 		}
 
 		result = append(result, service.WithdrawalInfo{
-			OrderNumber: h.OrderNumber,
-			Sum:         math.Round(h.Sum*100) / 100,
-			CreatedAt:   h.CreatedAt,
+			OrderNumber: t.OrderNumber,
+			Sum:         math.Round(t.Sum*100) / 100,
+			CreatedAt:   t.CreatedAt,
 		})
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].CreatedAt.Before(result[j].CreatedAt)
 	})
-
-	return result, nil
+	return result
 }
 
 func (s WithdrawalService) Balance(ctx context.Context, dto service.UserBalanceRequest) (service.UserBalance, error) {
@@ -84,9 +92,12 @@ func (s WithdrawalService) Balance(ctx context.Context, dto service.UserBalanceR
 	if err != nil {
 		return service.UserBalance{}, err
 	}
+	return calculateBalance(r), nil
+}
 
+func calculateBalance(transactions []gophermart.Transaction) service.UserBalance {
 	balance := service.UserBalance{}
-	for _, h := range r {
+	for _, h := range transactions {
 		if h.Income {
 			balance.Current += h.Sum
 		} else {
@@ -103,5 +114,6 @@ func (s WithdrawalService) Balance(ctx context.Context, dto service.UserBalanceR
 	balance.Current = math.Round(balance.Current*100) / 100
 	balance.Withdrawn = math.Round(balance.Withdrawn*100) / 100
 
-	return balance, nil
+	return balance
+
 }
