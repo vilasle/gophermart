@@ -98,8 +98,7 @@ func main() {
 		logger.Error("can not start order service", "error", err)
 		os.Exit(1)
 	}
-	defer orderSvc.Stop()
-
+	
 	ctrl := newController(dbRep, orderSvc)
 
 	mux := newMux(ctrl)
@@ -113,6 +112,9 @@ func main() {
 
 	<-s
 
+	orderSvc.Stop()
+	cancel()
+	
 	shutdown(ctx, server)
 }
 

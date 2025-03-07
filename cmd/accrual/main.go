@@ -92,7 +92,7 @@ func main() {
 
 	server := newServer(mux, args.addr)
 	defer server.Close()
-	
+
 	//catch SIGINT
 	s := signalSubscription()
 
@@ -100,7 +100,7 @@ func main() {
 	go run(server, s)
 
 	<-s
-	
+
 	shutdown(ctx, server)
 }
 
@@ -155,7 +155,7 @@ func newMux(ctrl accrual.Controller) *chi.Mux {
 	mux.Use(_middleware.Logger)
 	mux.Use(middleware.Recoverer)
 	//limiter of requests
-	mux.Use(httprate.Limit(30, time.Minute))
+	mux.Use(httprate.Limit(2, (time.Second * 15)))
 
 	mux.Method(http.MethodGet, "/api/orders/{number}", ctrl.OrderInfo())
 	mux.Method(http.MethodGet, "/orders/{number}", ctrl.OrderInfo())

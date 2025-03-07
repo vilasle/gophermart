@@ -48,42 +48,62 @@ type onError struct {
 }
 
 func (h onError) exec(ctx context.Context, svc *OrderService) {
+	log := logger.With("component", "onErrorAction")
 	if h.err == nil {
 		return
 	}
 
-	retry := handlerAccrualError(&h.job, h.err, svc.retryOnError)
+	select {
+	default:
+	case <-ctx.Done():
+		return
+	}
+
+	retry, needPause := handlerAccrualError(&h.job, h.err, svc.retryOnError)
+	if needPause {
+		if !svc.stopMx.TryLock() {
+			return
+		}
+		log.Debug("accrual service is overloaded, need to stop workers")
+		svc.needStopWorkers <- retry
+
+		svc.stopMx.Unlock()
+		return
+	}
 	if h.job.attempts == 0 {
 		if err := svc.postOrderState(ctx, h.job, gophermart.StatusInvalid, 0); err != nil {
-			logger.Error("updating order status was failed", "error", err)
+			log.Error("updating order status was failed", "error", err)
 		}
 	} else {
-		svc.startChecker(retry, h.job)
+		svc.startChecker(ctx, retry, h.job)
 	}
+
 }
 
-func handlerAccrualError(job *checkJob, err error, defaultRetry time.Duration) time.Duration {
-	logger.Error("getting information from accrual service was failed", "error", err)
+func handlerAccrualError(job *checkJob, err error, defaultRetry time.Duration) (retry time.Duration, needPause bool) {
+	log := logger.With("component", "handlerAccrualError")
+	log.Error("getting information from accrual service was failed", "error", err)
 
-	var limitErr *service.LimitError
-	retry := defaultRetry
+	var limitErr service.LimitError
+	retry = defaultRetry
 
 	if errors.As(err, &limitErr) {
 		retry = limitErr.RetryAfter
-		logger.Error("accrual service is overloaded, restart task",
+		needPause = true
+		log.Error("accrual service is overloaded, restart task",
 			"order", job.number,
 			"retryAfter", retry)
 	} else if errors.Is(err, service.ErrEntityDoesNotExists) {
 		job.attempts--
-		logger.Error("order does not exist on accrual service, may be it will be later, restart task",
+		log.Error("order does not exist on accrual service, may be it will be later, restart task",
 			"order", job.number,
 			"retryAfter", retry)
 	} else {
-		logger.Error("may by accrual service is not available, restart task",
+		log.Error("may by accrual service is not available, restart task",
 			"order", job.number,
 			"retryAfter", retry)
 	}
-	return retry
+	return retry, needPause
 
 }
 
@@ -93,8 +113,9 @@ type updateState struct {
 }
 
 func (h updateState) exec(ctx context.Context, svc *OrderService) {
+	log := logger.With("component", "updateState")
 	if err := svc.postOrderState(ctx, h.job, defineStatus(h.result), h.result.Accrual); err != nil {
-		logger.Error("updating order status was failed", "error", err)
+		log.Error("updating order status was failed", "error", err)
 		return
 	}
 }
@@ -117,7 +138,7 @@ type onProcessing struct {
 }
 
 func (h onProcessing) exec(ctx context.Context, svc *OrderService) {
-	svc.startChecker(svc.retryOnError, h.job)
+	svc.startChecker(ctx, svc.retryOnError, h.job)
 }
 
 type onProcessed struct {
@@ -126,8 +147,13 @@ type onProcessed struct {
 }
 
 func (h onProcessed) exec(ctx context.Context, svc *OrderService) {
+	log := logger.With("component", "onProcessedAction")
+	//this is successful situation but 
+	//if on this moment will cancel of context we could not save result 
+	//because will ignore
+	
 	if err := svc.postTransaction(ctx, h.job, h.result.Accrual); err != nil {
-		logger.Error("adding income to user balance was failed", "error", err)
+		log.Error("adding income to user balance was failed", "error", err)
 		return
 	}
 }

@@ -3,7 +3,7 @@ package order
 import (
 	"context"
 	"sort"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/vilasle/gophermart/internal/logger"
@@ -24,9 +24,12 @@ type OrderService struct {
 	repTx                  gophermart.WithdrawalRepository
 	accrual                service.AccrualService
 	jobs                   chan checkJob
+	jobNotice              chan int
 	retryOnError           time.Duration
 	attemptsGettingAccrual int
-	worked                 *atomic.Bool
+	stopMx                 *sync.Mutex
+	needStopWorkers        chan time.Duration
+	step                   time.Duration
 }
 
 type OrderServiceConfig struct {
@@ -42,24 +45,25 @@ func NewOrderService(config OrderServiceConfig) OrderService {
 		rep:                    config.OrderRepository,
 		repTx:                  config.WithdrawalRepository,
 		accrual:                config.AccrualService,
-		jobs:                   make(chan checkJob),
+		jobs:                   make(chan checkJob, 1024),
+		jobNotice:              make(chan int),
 		retryOnError:           config.RetryOnError,
 		attemptsGettingAccrual: config.AttemptsGettingAccrual,
-		worked:                 &atomic.Bool{},
+		needStopWorkers:        make(chan time.Duration),
+		stopMx:                 &sync.Mutex{},
+		step:                   time.Millisecond * 500,
 	}
 
 	return s
 }
 
 func (s OrderService) Start(ctx context.Context) error {
-	go s.runCheckerDirector(ctx)
+	go s.runCheckerDirector(ctx, 0)
 
 	if err := s.runNotProcessedOrders(ctx); err != nil {
 		logger.Error("run not processed jobs was failed", "error", err)
 		return err
 	}
-
-	s.worked.Store(true)
 
 	return nil
 }
@@ -86,11 +90,11 @@ func (s OrderService) Register(ctx context.Context, dto service.RegisterOrderReq
 		return err
 	}
 
-	s.startChecker(0, checkJob{
+	s.jobs <- checkJob{
 		number:   dto.Number,
 		userID:   dto.UserID,
 		attempts: s.attemptsGettingAccrual,
-	})
+	}
 
 	return nil
 }
@@ -156,22 +160,7 @@ func viewOfStatus(status int) string {
 
 func (s OrderService) Stop() {
 	close(s.jobs)
-	s.worked.Store(false)
-}
-
-func (s OrderService) runCheckerDirector(ctx context.Context) {
-	newCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	for job := range s.jobs {
-		if job.userID == "" {
-			logger.Error("user id is empty")
-			continue
-		}
-		go s.runChecker(newCtx, job)
-	}
-	logger.Info("checker director finished")
-
+	close(s.needStopWorkers)
 }
 
 func (s OrderService) runNotProcessedOrders(ctx context.Context) error {
@@ -197,57 +186,4 @@ func (s OrderService) runNotProcessedOrders(ctx context.Context) error {
 	}()
 
 	return nil
-}
-
-func (s OrderService) runChecker(ctx context.Context, job checkJob) {
-	select {
-	case <-ctx.Done():
-		return
-	default:
-		result, err := s.getAccrualInformationByOrder(ctx, job.number)
-
-		for _, action := range createActions(result, job, err) {
-			action.exec(ctx, &s)
-		}
-	}
-}
-
-func (s OrderService) getAccrualInformationByOrder(ctx context.Context, orderNumber string) (result service.AccrualsInfo, err error) {
-	timeCtx, cancel := context.WithTimeout(ctx, time.Second*10)
-	defer cancel()
-
-	return s.accrual.Accruals(timeCtx, service.AccrualsFilterRequest{
-		Number: orderNumber,
-	})
-}
-
-func (s OrderService) startChecker(retry time.Duration, job checkJob) {
-	time.AfterFunc(retry, func() {
-		if s.worked.Load() {
-			s.jobs <- job
-		}
-	})
-}
-
-func (s OrderService) postOrderState(ctx context.Context, job checkJob, status int, accrual float64) error {
-	dto := gophermart.OrderUpdateRequest{
-		UserID:  job.userID,
-		Number:  job.number,
-		Status:  status,
-		Accrual: accrual,
-	}
-	if err := s.rep.Update(ctx, dto); err != nil {
-		logger.Error("updating order status was failed", "error", err)
-		return err
-	}
-	return nil
-}
-
-func (s OrderService) postTransaction(ctx context.Context, job checkJob, accrual float64) error {
-	inDto := gophermart.WithdrawalRequest{
-		UserID:      job.userID,
-		OrderNumber: job.number,
-		Sum:         accrual,
-	}
-	return s.repTx.Income(ctx, inDto)
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/vilasle/gophermart/internal/service"
 )
 //TODO change test, and do not test all functions on one test
-func TODOTestOrderService_Register(t *testing.T) {
+func TODOTestOrderServiceRegister(t *testing.T) {
 	type args struct {
 		ctx context.Context
 		dto service.RegisterOrderRequest
