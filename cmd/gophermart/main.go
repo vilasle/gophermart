@@ -92,8 +92,15 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ctrl := newController(ctx, dbRep, accrualURL)
-	defer ctrl.OrderSvc.Close()
+
+	orderSvc := createOrderService(dbRep, accrualURL)
+	if err := orderSvc.Start(ctx); err != nil {
+		logger.Error("can not start order service", "error", err)
+		os.Exit(1)
+	}
+	defer orderSvc.Stop()
+
+	ctrl := newController(dbRep, orderSvc)
 
 	mux := newMux(ctrl)
 
@@ -134,16 +141,12 @@ func checkArgs(args cliArgs) error {
 	return errors.Join(errs...)
 }
 
-func newController(ctx context.Context, pgRepository pgRep.PostgresqlGophermartRepository, accrualURL *url.URL) gophermart.Controller {
-	withdrawalSvc := withdrawal.NewWithdrawalService(pgRepository)
-
-	authSvc := authorization.NewAuthorizationService(pgRepository)
-
+func createOrderService(pgRepository pgRep.PostgresqlGophermartRepository, accrualURL *url.URL) order.OrderService {
 	accrualSvc := accrual.NewAccrualService(
 		httpRep.NewAccrualRepository(accrualURL),
 	)
 
-	orderSvc := order.NewOrderService(ctx, order.OrderServiceConfig{
+	orderSvc := order.NewOrderService(order.OrderServiceConfig{
 		OrderRepository:        pgRepository,
 		AccrualService:         accrualSvc,
 		WithdrawalRepository:   pgRepository,
@@ -151,12 +154,22 @@ func newController(ctx context.Context, pgRepository pgRep.PostgresqlGophermartR
 		AttemptsGettingAccrual: 3,
 	})
 
+	return orderSvc
+}
+
+func newController(pgRepository pgRep.PostgresqlGophermartRepository, svc order.OrderService) gophermart.Controller {
+	withdrawalSvc := withdrawal.NewWithdrawalService(pgRepository)
+
+	authSvc := authorization.NewAuthorizationService(pgRepository)
+
 	return gophermart.Controller{
 		AuthSvc:     authSvc,
-		OrderSvc:    orderSvc,
+		OrderSvc:    svc,
 		WithdrawSvc: withdrawalSvc,
 	}
 }
+
+
 
 func newMux(ctrl gophermart.Controller) *chi.Mux {
 	mux := chi.NewMux()

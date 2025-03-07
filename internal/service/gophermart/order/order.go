@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"sort"
+	"sync/atomic"
 	"time"
 
 	"github.com/vilasle/gophermart/internal/logger"
@@ -25,6 +26,7 @@ type OrderService struct {
 	jobs                   chan checkJob
 	retryOnError           time.Duration
 	attemptsGettingAccrual int
+	worked                 *atomic.Bool
 }
 
 type OrderServiceConfig struct {
@@ -35,7 +37,7 @@ type OrderServiceConfig struct {
 	AttemptsGettingAccrual int
 }
 
-func NewOrderService(ctx context.Context, config OrderServiceConfig) OrderService {
+func NewOrderService(config OrderServiceConfig) OrderService {
 	s := OrderService{
 		rep:                    config.OrderRepository,
 		repTx:                  config.WithdrawalRepository,
@@ -43,16 +45,23 @@ func NewOrderService(ctx context.Context, config OrderServiceConfig) OrderServic
 		jobs:                   make(chan checkJob),
 		retryOnError:           config.RetryOnError,
 		attemptsGettingAccrual: config.AttemptsGettingAccrual,
-	}
-
-	go s.runCheckerDirector()
-
-	err := s.runNotProcessedOrders(ctx)
-	if err != nil {
-		logger.Error("run not processed jobs was failed", "error", err)
+		worked:                 &atomic.Bool{},
 	}
 
 	return s
+}
+
+func (s OrderService) Start(ctx context.Context) error {
+	go s.runCheckerDirector(ctx)
+
+	if err := s.runNotProcessedOrders(ctx); err != nil {
+		logger.Error("run not processed jobs was failed", "error", err)
+		return err
+	}
+
+	s.worked.Store(true)
+
+	return nil
 }
 
 func (s OrderService) Register(ctx context.Context, dto service.RegisterOrderRequest) error {
@@ -145,13 +154,13 @@ func viewOfStatus(status int) string {
 	}
 }
 
-func (s OrderService) Close() {
+func (s OrderService) Stop() {
 	close(s.jobs)
+	s.worked.Store(false)
 }
 
-func (s OrderService) runCheckerDirector() {
-	baseCtx := context.Background()
-	ctx, cancel := context.WithCancel(baseCtx)
+func (s OrderService) runCheckerDirector(ctx context.Context) {
+	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	for job := range s.jobs {
@@ -159,8 +168,10 @@ func (s OrderService) runCheckerDirector() {
 			logger.Error("user id is empty")
 			continue
 		}
-		go s.runChecker(ctx, job)
+		go s.runChecker(newCtx, job)
 	}
+	logger.Info("checker director finished")
+
 }
 
 func (s OrderService) runNotProcessedOrders(ctx context.Context) error {
@@ -171,10 +182,16 @@ func (s OrderService) runNotProcessedOrders(ctx context.Context) error {
 
 	go func() {
 		for _, order := range result {
-			s.jobs <- checkJob{
+			job := checkJob{
 				number:   order.Number,
 				userID:   order.UserID,
 				attempts: s.attemptsGettingAccrual,
+			}
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				s.jobs <- job
 			}
 		}
 	}()
@@ -206,7 +223,9 @@ func (s OrderService) getAccrualInformationByOrder(ctx context.Context, orderNum
 
 func (s OrderService) startChecker(retry time.Duration, job checkJob) {
 	time.AfterFunc(retry, func() {
-		s.jobs <- job
+		if s.worked.Load() {
+			s.jobs <- job
+		}
 	})
 }
 

@@ -97,6 +97,8 @@ func (r PostgresqlGophermartRepository) Expense(ctx context.Context, dto mart.Wi
 		return mart.ErrNotEnoughPoints
 	} else if err == sql.ErrNoRows {
 		return mart.ErrNotEnoughPoints
+	} else if err != nil {
+		return err
 	}
 
 	if _, err := tx.ExecContext(ctx, txt2, args2...); err != nil {
@@ -150,7 +152,7 @@ func scanTransactions(rows *sql.Rows) ([]mart.Transaction, error) {
 		}
 		transactions = append(transactions, transaction)
 	}
-	return transactions, nil
+	return transactions, rows.Err()
 }
 
 // OrderRepository
@@ -222,7 +224,7 @@ func scanAsOrdersInfo(rows *sql.Rows) ([]mart.OrderInfo, error) {
 		}
 		orders = append(orders, order)
 	}
-	return orders, nil
+	return orders, rows.Err()
 }
 
 func getRepositoryError(err error) error {
