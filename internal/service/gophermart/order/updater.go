@@ -17,6 +17,8 @@ type updateRepositoryJob struct {
 type updateWorkerConfig struct {
 	orderRepository       gophermart.OrderRepository
 	transactionRepository gophermart.WithdrawalRepository
+	quantityOfWorkers     int
+	jobs                  <-chan updateRepositoryJob
 }
 
 type updateWorker struct {
@@ -26,15 +28,15 @@ type updateWorker struct {
 }
 
 // responsibility for updating orders states and commit transactions
-func runUpdateWorkers(ctx context.Context, config updateWorkerConfig, input <-chan updateRepositoryJob, qtyWorkers int) {
+func runUpdateWorkers(ctx context.Context, config updateWorkerConfig) {
 	log := logger.With("component", "updater")
-	log.Debug("starting update workers", "qtyWorkers", qtyWorkers)
+	log.Debug("starting update workers", "qty", config.quantityOfWorkers)
 
-	for i := 0; i < qtyWorkers; i++ {
+	for i := 0; i < config.quantityOfWorkers; i++ {
 		worker := updateWorker{
 			orderRepository:       config.orderRepository,
 			transactionRepository: config.transactionRepository,
-			input:                 input,
+			input:                 config.jobs,
 		}
 
 		go worker.process(ctx)
@@ -52,7 +54,9 @@ func (e updateWorker) process(ctx context.Context) {
 			log.Debug("got stop signal. update worker will stop")
 			return
 		case job := <-e.input:
-			log.Debug("got data for updating accrual on repository", "job", job)
+			log.Debug("got updating job",
+				"order", job.orderNumber,
+				"userId", job.userID)
 
 			data, status := job.data, defineStatus(job.data.Status)
 
@@ -86,6 +90,7 @@ func (e updateWorker) commitTransaction(ctx context.Context, dto gophermart.With
 		log.Error("adding income to user balance was failed", "dto", dto, "error", err)
 		return
 	}
+	log.Debug("transaction was committed", "dto", dto)
 }
 
 func (e updateWorker) postOrderState(ctx context.Context, dto gophermart.OrderUpdateRequest) {
@@ -100,9 +105,10 @@ func (e updateWorker) postOrderState(ctx context.Context, dto gophermart.OrderUp
 	if err := e.orderRepository.Update(ctx, dto); err != nil {
 		log.Error("updating order status was failed", "dto", dto, "error", err)
 	}
+	log.Debug("order status was updated", "dto", dto)
 }
 
- func defineStatus(status string) int {
+func defineStatus(status string) int {
 	switch status {
 	case StatusProcessing:
 		return gophermart.StatusProcessing

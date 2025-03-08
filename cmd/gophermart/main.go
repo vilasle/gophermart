@@ -92,13 +92,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-
 	orderSvc := createOrderService(dbRep, accrualURL)
 	if err := orderSvc.Start(ctx); err != nil {
 		logger.Error("can not start order service", "error", err)
 		os.Exit(1)
 	}
-	
+
 	ctrl := newController(dbRep, orderSvc)
 
 	mux := newMux(ctrl)
@@ -112,10 +111,11 @@ func main() {
 
 	<-s
 
-	orderSvc.Stop()
-	cancel()
-	
 	shutdown(ctx, server)
+
+	cancel()
+
+	time.Sleep(time.Millisecond * 2500)
 }
 
 func initLogger(args cliArgs) {
@@ -170,8 +170,6 @@ func newController(pgRepository pgRep.PostgresqlGophermartRepository, svc order.
 		WithdrawSvc: withdrawalSvc,
 	}
 }
-
-
 
 func newMux(ctrl gophermart.Controller) *chi.Mux {
 	mux := chi.NewMux()
@@ -231,6 +229,7 @@ func shutdown(ctx context.Context, server *http.Server) {
 
 	if err := server.Shutdown(newCtx); err != nil {
 		logger.Error("server shutdown failed", "error", err)
+		server.Close()
 	} else {
 		logger.Info("server stopped gracefully")
 	}

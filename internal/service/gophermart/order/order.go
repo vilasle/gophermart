@@ -3,7 +3,6 @@ package order
 import (
 	"context"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/vilasle/gophermart/internal/logger"
@@ -20,16 +19,18 @@ const (
 )
 
 type OrderService struct {
-	rep                    gophermart.OrderRepository
-	repTx                  gophermart.WithdrawalRepository
-	accrual                service.AccrualService
-	jobs                   chan checkJob
-	jobNotice              chan int
+	rep                  gophermart.OrderRepository
+	repTx                gophermart.WithdrawalRepository
+	accrual              service.AccrualService
+	accrualJobs          chan checkAccrualJob
+	updateRepositoryJobs chan updateRepositoryJob
+
+	// jobNotice              chan int
 	retryOnError           time.Duration
 	attemptsGettingAccrual int
-	stopMx                 *sync.Mutex
-	needStopWorkers        chan time.Duration
-	step                   time.Duration
+	// stopMx                 *sync.Mutex
+	// needStopWorkers        chan time.Duration
+
 }
 
 type OrderServiceConfig struct {
@@ -45,23 +46,45 @@ func NewOrderService(config OrderServiceConfig) OrderService {
 		rep:                    config.OrderRepository,
 		repTx:                  config.WithdrawalRepository,
 		accrual:                config.AccrualService,
-		jobs:                   make(chan checkJob, 1024),
-		jobNotice:              make(chan int),
+		accrualJobs:            make(chan checkAccrualJob),
+		updateRepositoryJobs:   make(chan updateRepositoryJob),
 		retryOnError:           config.RetryOnError,
 		attemptsGettingAccrual: config.AttemptsGettingAccrual,
-		needStopWorkers:        make(chan time.Duration),
-		stopMx:                 &sync.Mutex{},
-		step:                   time.Millisecond * 500,
 	}
 
 	return s
 }
 
 func (s OrderService) Start(ctx context.Context) error {
-	go s.runCheckerDirector(ctx, 0)
+	log := logger.With("component", "OrderService")
+	log.Info("starting service")
+
+	//getting accrual information
+	gettingAccrualConfig := gettingAccrualConfig{
+		svc:                  s.accrual,
+		jobs:                 s.accrualJobs,
+		updateJobs:           s.updateRepositoryJobs,
+		defaultRestartPeriod: s.retryOnError,
+	}
+
+	manager := newAccrualManager(gettingAccrualConfig)
+	go manager.process(ctx)
+
+	//update orders' information and add transactions
+	updateWorkersConfig := updateWorkerConfig{
+		orderRepository:       s.rep,
+		transactionRepository: s.repTx,
+		quantityOfWorkers:     1,
+		jobs:                  s.updateRepositoryJobs,
+	}
+
+	go runUpdateWorkers(ctx, updateWorkersConfig)
+
+	//after cancel context need read all messages from channel and close it in order to avoid panic on stopping
+	go s.waitStop(ctx)
 
 	if err := s.runNotProcessedOrders(ctx); err != nil {
-		logger.Error("run not processed jobs was failed", "error", err)
+		log.Error("run not processed jobs was failed, service will stop", "error", err)
 		return err
 	}
 
@@ -90,7 +113,7 @@ func (s OrderService) Register(ctx context.Context, dto service.RegisterOrderReq
 		return err
 	}
 
-	s.jobs <- checkJob{
+	s.accrualJobs <- checkAccrualJob{
 		number:   dto.Number,
 		userID:   dto.UserID,
 		attempts: s.attemptsGettingAccrual,
@@ -158,9 +181,24 @@ func viewOfStatus(status int) string {
 	}
 }
 
-func (s OrderService) Stop() {
-	close(s.jobs)
-	close(s.needStopWorkers)
+func (s OrderService) waitStop(ctx context.Context) {
+	<-ctx.Done()
+	//panic defense
+	time.Sleep(time.Millisecond * 500)
+
+	log := logger.With("component", "OrderService", "operation", "stopping service")
+	for range s.updateRepositoryJobs {
+		log.Debug("read message from updateRepositoryJobs")
+		time.Sleep(time.Millisecond * 500)
+	}
+
+	for range s.accrualJobs {
+		log.Debug("read message from accrualJobs")
+		time.Sleep(time.Millisecond * 500)
+	}
+	logger.Debug("close accrualJobs and updateRepositoryJobs")
+	close(s.accrualJobs)
+	close(s.updateRepositoryJobs)
 }
 
 func (s OrderService) runNotProcessedOrders(ctx context.Context) error {
@@ -170,8 +208,9 @@ func (s OrderService) runNotProcessedOrders(ctx context.Context) error {
 	}
 
 	go func() {
+		logger.Debug("run not processed orders", "count", len(result))
 		for _, order := range result {
-			job := checkJob{
+			job := checkAccrualJob{
 				number:   order.Number,
 				userID:   order.UserID,
 				attempts: s.attemptsGettingAccrual,
@@ -180,7 +219,7 @@ func (s OrderService) runNotProcessedOrders(ctx context.Context) error {
 			case <-ctx.Done():
 				return
 			default:
-				s.jobs <- job
+				s.accrualJobs <- job
 			}
 		}
 	}()

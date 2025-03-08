@@ -155,7 +155,7 @@ func newMux(ctrl accrual.Controller) *chi.Mux {
 	mux.Use(_middleware.Logger)
 	mux.Use(middleware.Recoverer)
 	//limiter of requests
-	mux.Use(httprate.Limit(2, (time.Second * 15)))
+	mux.Use(httprate.Limit(60, (time.Minute)))
 
 	mux.Method(http.MethodGet, "/api/orders/{number}", ctrl.OrderInfo())
 	mux.Method(http.MethodGet, "/orders/{number}", ctrl.OrderInfo())

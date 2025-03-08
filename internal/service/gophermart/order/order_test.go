@@ -12,7 +12,8 @@ import (
 	"github.com/vilasle/gophermart/internal/repository/gophermart"
 	"github.com/vilasle/gophermart/internal/service"
 )
-//TODO change test, and do not test all functions on one test
+
+// TODO change test, and do not test all functions on one test
 func TODOTestOrderServiceRegister(t *testing.T) {
 	type args struct {
 		ctx context.Context
@@ -386,8 +387,6 @@ func TODOTestOrderServiceRegister(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			svc.Stop()
-
 			time.Sleep(tt.wait)
 		})
 	}
@@ -497,7 +496,7 @@ func TestOrderService_List(t *testing.T) {
 					m.EXPECT().
 						List(ctx, gophermart.OrderListRequest{Status: gophermart.StatusNew}).
 						Return([]gophermart.OrderInfo{}, nil)
-						
+
 					m.EXPECT().List(ctx, dtoIn).Return(dtoOut, errOut)
 				},
 			},
@@ -548,8 +547,6 @@ func TestOrderService_List(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.want.dto, got)
 			}
-
-			svc.Stop()
 
 			time.Sleep(time.Microsecond * 500)
 		})
