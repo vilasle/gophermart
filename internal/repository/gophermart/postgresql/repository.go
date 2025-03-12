@@ -98,7 +98,7 @@ func (r PostgresqlGophermartRepository) Expense(ctx context.Context, dto mart.Wi
 	} else if err == sql.ErrNoRows {
 		return mart.ErrNotEnoughPoints
 	} else if err != nil {
-		return err
+		return getRepositoryError(err)
 	}
 
 	if _, err := tx.ExecContext(ctx, txt2, args2...); err != nil {

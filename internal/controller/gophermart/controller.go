@@ -15,12 +15,6 @@ import (
 	"github.com/vilasle/gophermart/internal/service"
 )
 
-// TODO [MENTOR]
-// 1) If error => should I switch response to only the header with error (no content-type or text/plain) anyway??
-// 2) Is it needed to set h.Set("X-Content-Type-Options", "nosniff") everywhere to evade malware js activation?
-// 3) How to handle w.Write(dataMarsh) the best?
-// 4) Лучше хранить токен в куках или в хэдэре авторизэйшн (почему для хэдеров не нужна БД)?
-// TODO: implement it in config (env)
 const TokenExp = time.Hour * 1
 const secretKey = "supersecretkey"
 
@@ -308,7 +302,6 @@ func genJWTTokenString(userID string) (string, error) {
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, JWTClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			// set expiration time
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(TokenExp)),
 		},
 
