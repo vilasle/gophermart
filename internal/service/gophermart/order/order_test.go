@@ -391,7 +391,7 @@ func TODOTestOrderServiceRegister(t *testing.T) {
 	}
 }
 
-func TODOTestOrderService_List(t *testing.T) {
+func TODOTestOrderServiceList(t *testing.T) {
 	type args struct {
 		ctx context.Context
 		dto service.ListOrderRequest
