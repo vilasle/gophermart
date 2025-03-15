@@ -93,10 +93,7 @@ func main() {
 	defer cancel()
 
 	orderSvc := createOrderService(dbRep, accrualURL)
-	if err := orderSvc.Start(ctx); err != nil {
-		logger.Error("can not start order service", "error", err)
-		os.Exit(1)
-	}
+	orderSvc.Start(ctx)
 
 	ctrl := newController(dbRep, orderSvc)
 

@@ -19,18 +19,11 @@ const (
 )
 
 type OrderService struct {
-	rep                  gophermart.OrderRepository
-	repTx                gophermart.WithdrawalRepository
-	accrual              service.AccrualService
-	accrualJobs          chan checkAccrualJob
-	updateRepositoryJobs chan updateRepositoryJob
-
-	// jobNotice              chan int
+	rep                    gophermart.OrderRepository
+	repTx                  gophermart.WithdrawalRepository
+	accrual                service.AccrualService
 	retryOnError           time.Duration
 	attemptsGettingAccrual int
-	// stopMx                 *sync.Mutex
-	// needStopWorkers        chan time.Duration
-
 }
 
 type OrderServiceConfig struct {
@@ -46,8 +39,6 @@ func NewOrderService(config OrderServiceConfig) OrderService {
 		rep:                    config.OrderRepository,
 		repTx:                  config.WithdrawalRepository,
 		accrual:                config.AccrualService,
-		accrualJobs:            make(chan checkAccrualJob),
-		updateRepositoryJobs:   make(chan updateRepositoryJob),
 		retryOnError:           config.RetryOnError,
 		attemptsGettingAccrual: config.AttemptsGettingAccrual,
 	}
@@ -55,40 +46,26 @@ func NewOrderService(config OrderServiceConfig) OrderService {
 	return s
 }
 
-func (s OrderService) Start(ctx context.Context) error {
+func (s OrderService) Start(ctx context.Context) {
 	log := logger.With("component", "OrderService")
 	log.Info("starting service")
 
 	//getting accrual information
-	gettingAccrualConfig := gettingAccrualConfig{
-		svc:                  s.accrual,
-		jobs:                 s.accrualJobs,
-		updateJobs:           s.updateRepositoryJobs,
-		defaultRestartPeriod: s.retryOnError,
+	managerConfig := accrualManagerConfig{
+		accrualSvc: s.accrual,
+		ordersSvc:  s,
+		updatingOrder: updatingOrder{
+			orderRepository:       s.rep,
+			transactionRepository: s.repTx,
+		},
+		timeoutOnError:  s.retryOnError,
+		attemptsOnError: s.attemptsGettingAccrual,
+		readJobsTimeout: time.Second * 5,
 	}
 
-	manager := newAccrualManager(gettingAccrualConfig)
-	go manager.process(ctx)
+	manager := newAccrualManager(managerConfig)
 
-	//update orders' information and add transactions
-	updateWorkersConfig := updateWorkerConfig{
-		orderRepository:       s.rep,
-		transactionRepository: s.repTx,
-		quantityOfWorkers:     1,
-		jobs:                  s.updateRepositoryJobs,
-	}
-
-	go runUpdateWorkers(ctx, updateWorkersConfig)
-
-	//after cancel context need read all messages from channel and close it in order to avoid panic on stopping
-	go s.waitStop(ctx)
-
-	if err := s.runNotProcessedOrders(ctx); err != nil {
-		log.Error("run not processed jobs was failed, service will stop", "error", err)
-		return err
-	}
-
-	return nil
+	go manager.start(ctx, 5)
 }
 
 func (s OrderService) Register(ctx context.Context, dto service.RegisterOrderRequest) error {
@@ -111,12 +88,6 @@ func (s OrderService) Register(ctx context.Context, dto service.RegisterOrderReq
 
 	if err := s.rep.Create(ctx, rdt); err != nil {
 		return err
-	}
-
-	s.accrualJobs <- checkAccrualJob{
-		number:   dto.Number,
-		userID:   dto.UserID,
-		attempts: s.attemptsGettingAccrual,
 	}
 
 	return nil
@@ -181,48 +152,24 @@ func viewOfStatus(status int) string {
 	}
 }
 
-func (s OrderService) waitStop(ctx context.Context) {
-	<-ctx.Done()
-	//panic defense
-	time.Sleep(time.Millisecond * 500)
-
-	log := logger.With("component", "OrderService", "operation", "stopping service")
-	for range s.updateRepositoryJobs {
-		log.Debug("read message from updateRepositoryJobs")
-		time.Sleep(time.Millisecond * 500)
-	}
-
-	for range s.accrualJobs {
-		log.Debug("read message from accrualJobs")
-		time.Sleep(time.Millisecond * 500)
-	}
-	logger.Debug("close accrualJobs and updateRepositoryJobs")
-	close(s.accrualJobs)
-	close(s.updateRepositoryJobs)
-}
-
-func (s OrderService) runNotProcessedOrders(ctx context.Context) error {
-	result, err := s.rep.List(ctx, gophermart.OrderListRequest{Status: gophermart.StatusNew})
+func (s OrderService) unprocessedOrders(ctx context.Context) ([]service.OrderInfo, error) {
+	result, err := s.rep.List(ctx, gophermart.OrderListRequest{
+		Status: []int{gophermart.StatusNew, gophermart.StatusProcessing},
+		Limit:  50,
+	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	go func() {
-		logger.Debug("run not processed orders", "count", len(result))
-		for _, order := range result {
-			job := checkAccrualJob{
-				number:   order.Number,
-				userID:   order.UserID,
-				attempts: s.attemptsGettingAccrual,
-			}
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				s.accrualJobs <- job
-			}
+	orders := make([]service.OrderInfo, len(result))
+	for i, order := range result {
+		orders[i] = service.OrderInfo{
+			UserID:    order.UserID,
+			Number:    order.Number,
+			Status:    viewOfStatus(order.Status),
+			Accrual:   order.Accrual,
+			CreatedAt: order.CreatedAt,
 		}
-	}()
-
-	return nil
+	}
+	return orders, nil
 }

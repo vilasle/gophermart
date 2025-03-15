@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/vilasle/gophermart/internal/logger"
@@ -17,173 +16,186 @@ type checkAccrualJob struct {
 	attempts int
 }
 
-type gettingAccrualConfig struct {
-	svc                  service.AccrualService
-	jobs                 chan checkAccrualJob
-	updateJobs           chan<- updateRepositoryJob //write only
-	defaultRestartPeriod time.Duration
-}
-
 type accrualManager struct {
-	svc service.AccrualService
 	/*
-		getting information from order service or will restart
+		getting accrual information
+	*/
+	accrualSvc service.AccrualService
+	/*
+		how often need send request and read new jobs
+	*/
+	readJobsTimeout time.Duration
+	/*
+		getting unprocessed orders
+	*/
+	ordersSvc OrderService
+	/*
+		updating order state and posting transactions
+	*/
+	updatingOrder updatingOrder
+	/*
+		interaction job's reader and workers
 	*/
 	jobs chan checkAccrualJob
 	/*
-		getting pause period from child goroutine
+		sleeping timeout when accrual service does not contain order or return another error, except ErrLimit
 	*/
-	pauseSignal          chan time.Duration
-	defaultRestartPeriod time.Duration
+	timeoutOnError time.Duration
 	/*
-		write info to updater
+		quantity of attempts to get accrual information before set invalid state
+		if accrual service does not contain order
 	*/
-	updateJobs chan<- updateRepositoryJob
+	attemptsOnError int
 	/*
-		state manager's child
+		if got ErrLimit workers will wait when can continue work
 	*/
-	paused *atomic.Bool
-	/*
-		when child got limit error it lock mutex
-		and will wait context's cancel, it will be signal for unlocking mutex
-	*/
-	waitingPauseMx *sync.Mutex
+	limit   time.Time
+	limitMx *sync.Mutex
+	wg      *sync.WaitGroup
+	//protection from run the same jobs
+	mxProcessingMx *sync.Mutex
+	orderOnProcess map[string]struct{}
 }
 
-func newAccrualManager(config gettingAccrualConfig) *accrualManager {
+type accrualManagerConfig struct {
+	accrualSvc      service.AccrualService
+	ordersSvc       OrderService
+	updatingOrder   updatingOrder
+	timeoutOnError  time.Duration
+	attemptsOnError int
+	readJobsTimeout time.Duration
+}
+
+func newAccrualManager(config accrualManagerConfig) *accrualManager {
 	return &accrualManager{
-		svc:                  config.svc,
-		jobs:                 config.jobs,
-		pauseSignal:          make(chan time.Duration),
-		defaultRestartPeriod: config.defaultRestartPeriod,
-		updateJobs:           config.updateJobs,
-		paused:               &atomic.Bool{},
-		waitingPauseMx:       &sync.Mutex{},
+		jobs:            make(chan checkAccrualJob),
+		limit:           time.Now(),
+		limitMx:         &sync.Mutex{},
+		accrualSvc:      config.accrualSvc,
+		ordersSvc:       config.ordersSvc,
+		updatingOrder:   config.updatingOrder,
+		timeoutOnError:  config.timeoutOnError,
+		attemptsOnError: config.attemptsOnError,
+		readJobsTimeout: config.readJobsTimeout,
+		wg:              &sync.WaitGroup{},
+		mxProcessingMx:  &sync.Mutex{},
+		orderOnProcess:  make(map[string]struct{}),
 	}
 }
 
-func (m accrualManager) process(ctx context.Context) {
-	log := logger.With("component", "accrual manager", "operation", "process")
-	//for pause on limit error
-	pauseTick := time.NewTicker(time.Microsecond)
-	pauseTick.Stop()
+func (m *accrualManager) start(ctx context.Context, qtyWorkers int) {
+	m.wg.Add(qtyWorkers + 1)
+	go m.runJobReader(ctx)
 
-	accumulator := make([]checkAccrualJob, 0, 1024)
+	for i := 0; i < qtyWorkers; i++ {
+		go m.runWorker(ctx)
+	}
 
-	childCtx, cancel := context.WithCancel(ctx)
+	<-ctx.Done()
 
-	delayStep := time.Millisecond * 100
-	delay := time.Duration(0)
+	m.stop()
+}
 
+/*
+the worker listen to channel of jobs, get information about order from accrual service
+and update state in order service
+*/
+func (m *accrualManager) runWorker(ctx context.Context) {
+	defer m.wg.Done()
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debug("got stop signal. GettingAccrualInformation will stop")
-			cancel()
 			return
-		case job := <-m.jobs:
-			log.Debug("got accrual job",
-				"order", job.number,
-				"user", job.userID,
-				"attempts", job.attempts,
-			)
-
-			if job.userID == "" || job.number == "" || job.attempts == 0 {
-				log.Debug("got invalid job. skip it")
+		case job, ok := <-m.jobs:
+			if !ok {
+				return
+			}
+			m.mxProcessingMx.Lock()
+			if _, ok := m.orderOnProcess[job.number]; ok {
+				m.mxProcessingMx.Unlock()
 				continue
 			}
-
-			//if on pause then add job to accumulator
-			//if on fine run checker to get accrual information and
-			if m.paused.Load() {
-				accumulator = append(accumulator, job)
-				log.Debug("accrual manager is on pause. save it to accumulator", "len", len(accumulator))
-				continue
-			}
-			if delay > 0 {
-				time.Sleep(delay)
-			}
-			go m.getAccrualInfo(childCtx, job)
-
-		case pause := <-m.pauseSignal:
-			log.Debug("got pause signal. need to stop all jobs")
-			m.paused.Store(true)
-
-			delay += delayStep
-			log.Debug("increase delay", "current", delay)
-
-			//if there are processes on execution request and they can be successfully, wait little time
-			//if they almost failed then where just restart they
-			time.Sleep(delay)
-
-			cancel()
-			pauseTick.Reset(pause)
-		case <-pauseTick.C:
-			log.Debug("got pause tick. need to restart all jobs and clean accumulator")
-
-			childCtx, cancel = context.WithCancel(ctx)
-
-			m.paused.Store(false)
-			pauseTick.Stop()
-
-			for _, job := range accumulator {
-				if delay > 0 {
-					time.Sleep(delay)
-				}
-				go m.getAccrualInfo(childCtx, job)
-			}
-			accumulator = accumulator[:0]
+			m.orderOnProcess[job.number] = struct{}{}
+			m.mxProcessingMx.Unlock()
+			m.processJob(ctx, job)
 		}
 	}
 }
 
-func (m accrualManager) getAccrualInfo(ctx context.Context, job checkAccrualJob) {
-	log := logger.With("component", "accrual manager", "operation", "getAccrualInfo")
+func (m *accrualManager) processJob(ctx context.Context, job checkAccrualJob) {
+	log := logger.With("component", "accrual manager", "operation", "processJob", "order", job.number)
 
-	select {
-	default:
-	case <-ctx.Done():
-		log.Debug("got stop signal. GettingAccrualInformation will stop")
+	defer func() {
+		m.mxProcessingMx.Lock()
+		delete(m.orderOnProcess, job.number)
+		m.mxProcessingMx.Unlock()
+	}()
+
+	//set state anyway
+	if err := m.updatingOrder.updateOrder(ctx, updateRepositoryJob{
+		userID:      job.userID,
+		orderNumber: job.number,
+		data: service.AccrualsInfo{
+			OrderNumber: job.number,
+			Status:      StatusProcessing,
+			Accrual:     0,
+		},
+	}); err != nil {
+		log.Error("failed to update order", "order", job.number, "error", err)
 		return
 	}
 
-	result, err := m.svc.Accruals(ctx, service.AccrualsFilterRequest{
-		Number: job.number,
-	})
+	for job.attempts > 0 {
+		//was there limit error and should it wait?
+		now := time.Now()
+		if now.Before(m.limit) {
+			log.Debug("was limit error. need to wait", "start", now.Format(time.RFC3339), "finish", m.limit.Format(time.RFC3339))
+			time.Sleep(m.limit.Sub(now))
+		}
 
-	if err == nil {
-		m.updateJobs <- updateRepositoryJob{
+		result, err := m.accrualSvc.Accruals(ctx, service.AccrualsFilterRequest{
+			Number: job.number,
+		})
+
+		retry, raisePause := handleError(err, &job, m.timeoutOnError)
+
+		//does it need to set new limit?
+		if raisePause {
+			log.Debug("need to lock limit mutex")
+			if m.limitMx.TryLock() {
+				log.Debug("limit mutex was locked")
+				m.limit = time.Now().Add(retry)
+				m.limitMx.Unlock()
+				log.Debug("new workers limit", "date", m.limit.Format(time.RFC3339))
+			}
+			continue
+		} else if err != nil && retry == 0 {
+			//service is not available, job will  restart when reader get one on next time
+			break
+		} else if retry > 0 {
+			now := time.Now()
+			log.Debug("order does not found on accrual service, need to wait",
+				"start", now.Format(time.RFC3339),
+				"finish", now.Add(retry).Format(time.RFC3339),
+			)
+			time.Sleep(retry)
+			continue
+		}
+
+		//handler normal situation
+		if err := m.updatingOrder.updateOrder(ctx, updateRepositoryJob{
 			userID:      job.userID,
 			orderNumber: job.number,
 			data:        result,
+		}); err != nil {
+			log.Error("failed to update order", "order", job.number, "error", err)
 		}
-		return
+		break
 	}
 
-	retry, raisePause := handleError(err, &job, m.defaultRestartPeriod)
-	if raisePause {
-		//try to lock mutex if can not it mean other child had notified manager about limit error
-		log.Debug("need to lock pause mutex")
-		if m.waitingPauseMx.TryLock() {
-			log.Debug("pause mutex was locked")
-
-			log.Debug("need to notify manager about limit error")
-			m.pauseSignal <- retry
-			log.Debug("manager was notified")
-
-			log.Debug("pause mutex was locked, will wait for the stop signal")
-			<-ctx.Done()
-			log.Debug("got stop signal, will unlock pause mutex")
-			m.waitingPauseMx.Unlock()
-		}
-		log.Debug("restart job after getting limit error", "order", job.number)
-		m.jobs <- job
-		return
-	}
-	//order does not exists on accrual service and all attempts was used
 	if job.attempts == 0 {
-		log.Debug("all attempts was used. save order as invalid", "order", job.number)
-		m.updateJobs <- updateRepositoryJob{
+		log.Debug("order does not found on accrual service, all attempts was used, mark order as invalid")
+		err := m.updatingOrder.updateOrder(ctx, updateRepositoryJob{
 			userID:      job.userID,
 			orderNumber: job.number,
 			data: service.AccrualsInfo{
@@ -191,13 +203,12 @@ func (m accrualManager) getAccrualInfo(ctx context.Context, job checkAccrualJob)
 				Status:      StatusInvalid,
 				Accrual:     0,
 			},
+		})
+		if err != nil {
+			log.Error("failed to update order", "order", job.number, "error", err)
 		}
-		return
 	}
-	time.AfterFunc(retry, func() {
-		log.Debug("restart job after default delay", "order", job.number)
-		m.jobs <- job
-	})
+
 }
 
 func handleError(err error, job *checkAccrualJob, defaultRetry time.Duration) (retry time.Duration, raisePause bool) {
@@ -209,8 +220,11 @@ func handleError(err error, job *checkAccrualJob, defaultRetry time.Duration) (r
 		"attempts", job.attempts,
 	)
 
+	if err == nil {
+		return 0, false
+	}
+
 	var limitErr service.LimitError
-	retry = defaultRetry
 
 	if errors.As(err, &limitErr) {
 		log.Error("accrual service is overload", "error", err)
@@ -220,8 +234,57 @@ func handleError(err error, job *checkAccrualJob, defaultRetry time.Duration) (r
 		//but it can mean that we loaded dummy order
 		log.Error("accrual service does not have information about order, may be it will be later", "error", err)
 		job.attempts--
+		retry = defaultRetry
 	} else {
 		log.Error("accrual service is not available, task will restart later", "error", err)
 	}
 	return retry, raisePause
+}
+
+/*
+reader by ticker get information from order service about unprocessed orders
+and push they to channel of jobs
+*/
+func (m *accrualManager) runJobReader(ctx context.Context) {
+	defer m.wg.Done()
+
+	ticker := time.NewTicker(m.readJobsTimeout)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.readJobs(ctx)
+		}
+	}
+}
+
+func (m *accrualManager) readJobs(ctx context.Context) {
+	orders, err := m.ordersSvc.unprocessedOrders(ctx)
+	if err != nil {
+		logger.Error("reading unprocessed order failed", "error", err)
+		return
+	}
+
+	for _, order := range orders {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		m.jobs <- checkAccrualJob{
+			userID:   order.UserID,
+			number:   order.Number,
+			attempts: m.attemptsOnError,
+		}
+	}
+}
+
+// waiting when all workers finished and close channels
+func (m *accrualManager) stop() {
+	m.wg.Wait()
+	close(m.jobs)
 }

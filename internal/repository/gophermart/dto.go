@@ -46,7 +46,8 @@ type OrderUpdateRequest struct {
 type OrderListRequest struct {
 	UserID      string
 	OrderNumber string
-	Status	  int
+	Status	  []int
+	Limit	   int
 }
 
 type OrderInfo struct {

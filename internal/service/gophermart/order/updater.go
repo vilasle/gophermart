@@ -14,98 +14,71 @@ type updateRepositoryJob struct {
 	data        service.AccrualsInfo
 }
 
-type updateWorkerConfig struct {
+type updatingOrder struct {
 	orderRepository       gophermart.OrderRepository
 	transactionRepository gophermart.WithdrawalRepository
-	quantityOfWorkers     int
-	jobs                  <-chan updateRepositoryJob
 }
 
-type updateWorker struct {
-	orderRepository       gophermart.OrderRepository
-	transactionRepository gophermart.WithdrawalRepository
-	input                 <-chan updateRepositoryJob
-}
-
-// responsibility for updating orders states and commit transactions
-func runUpdateWorkers(ctx context.Context, config updateWorkerConfig) {
-	log := logger.With("component", "updater")
-	log.Debug("starting update workers", "qty", config.quantityOfWorkers)
-
-	for i := 0; i < config.quantityOfWorkers; i++ {
-		worker := updateWorker{
-			orderRepository:       config.orderRepository,
-			transactionRepository: config.transactionRepository,
-			input:                 config.jobs,
-		}
-
-		go worker.process(ctx)
-	}
-
-	log.Debug("update workers started")
-}
-
-func (e updateWorker) process(ctx context.Context) {
+func (e updatingOrder) updateOrder(ctx context.Context, job updateRepositoryJob) error {
 	log := logger.With("component", "updater instance")
+	log.Debug("got updating job",
+		"order", job.orderNumber,
+		"userId", job.userID)
 
-	for {
-		select {
-		case <-ctx.Done():
-			log.Debug("got stop signal. update worker will stop")
-			return
-		case job := <-e.input:
-			log.Debug("got updating job",
-				"order", job.orderNumber,
-				"userId", job.userID)
+	data, status := job.data, defineStatus(job.data.Status)
 
-			data, status := job.data, defineStatus(job.data.Status)
+	if err := e.postOrderState(ctx, gophermart.OrderUpdateRequest{
+		UserID:  job.userID,
+		Number:  job.orderNumber,
+		Status:  status,
+		Accrual: data.Accrual,
+	}); err != nil {
+		return err
+	}
 
-			go e.postOrderState(ctx, gophermart.OrderUpdateRequest{
-				UserID:  job.userID,
-				Number:  job.orderNumber,
-				Status:  status,
-				Accrual: data.Accrual,
-			})
-
-			if status == gophermart.StatusProcessed {
-				go e.commitTransaction(ctx, gophermart.WithdrawalRequest{
-					UserID:      job.userID,
-					OrderNumber: job.orderNumber,
-					Sum:         data.Accrual,
-				})
-			}
+	if status == gophermart.StatusProcessed {
+		if err := e.commitTransaction(ctx, gophermart.WithdrawalRequest{
+			UserID:      job.userID,
+			OrderNumber: job.orderNumber,
+			Sum:         data.Accrual,
+		}); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
-func (e updateWorker) commitTransaction(ctx context.Context, dto gophermart.WithdrawalRequest) {
+func (e updatingOrder) commitTransaction(ctx context.Context, dto gophermart.WithdrawalRequest) error{
 	log := logger.With("component", "commitTransaction")
 	select {
 	default:
 	case <-ctx.Done():
 		log.Debug("context was canceled, committing of transaction will stop")
-		return
+		return ctx.Err()
 	}
 	if err := e.transactionRepository.Income(ctx, dto); err != nil {
 		log.Error("adding income to user balance was failed", "dto", dto, "error", err)
-		return
+		return err
 	}
 	log.Debug("transaction was committed", "dto", dto)
+	return nil
 }
 
-func (e updateWorker) postOrderState(ctx context.Context, dto gophermart.OrderUpdateRequest) {
+func (e updatingOrder) postOrderState(ctx context.Context, dto gophermart.OrderUpdateRequest) error {
 	log := logger.With("component", "postOrderState")
 	select {
 	default:
 	case <-ctx.Done():
 		log.Debug("context was canceled, updater will stop")
-		return
+		return ctx.Err()
 	}
 
 	if err := e.orderRepository.Update(ctx, dto); err != nil {
 		log.Error("updating order status was failed", "dto", dto, "error", err)
+		return err
 	}
 	log.Debug("order status was updated", "dto", dto)
+	return nil
 }
 
 func defineStatus(status string) int {

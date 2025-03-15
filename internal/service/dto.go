@@ -18,7 +18,7 @@ func DefineCalculationType(t int) (value CalculationType, correct bool) {
 
 const (
 	CalculationTypeUnknown CalculationType = iota
-	CalculationTypePercent 
+	CalculationTypePercent
 	CalculationTypeFixed
 )
 
@@ -50,6 +50,7 @@ type ListOrderRequest struct {
 }
 
 type OrderInfo struct {
+	UserID    string
 	Number    string
 	Status    string
 	Accrual   float64

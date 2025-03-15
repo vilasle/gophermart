@@ -193,8 +193,12 @@ func (r PostgresqlGophermartRepository) List(ctx context.Context, dto mart.Order
 		sp.Where(sp.Equal("user_id", dto.UserID))
 	}
 
-	if dto.Status > 0 {
-		sp.Where(sp.Equal("status", dto.Status))
+	if len(dto.Status) > 0 {
+		sp.Where(sp.Any("status", "=", dto.Status))
+	}
+
+	if dto.Limit > 0 {
+		sp.Limit(dto.Limit)
 	}
 
 	txt, args := sp.BuildWithFlavor(sqlbuilder.PostgreSQL)
