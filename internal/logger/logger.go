@@ -3,7 +3,10 @@ package logger
 import (
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
+
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 const (
@@ -44,4 +47,12 @@ func Warn(msg string, args ...any) {
 
 func Error(msg string, args ...any) {
 	logger.Error(msg, args...)
+}
+
+func GetRequestLogger(r *http.Request) *slog.Logger {
+	reqID := r.Context().Value(middleware.RequestIDKey)
+	if reqID == nil {
+		reqID = ""
+	}
+	return With("id", reqID.(string))
 }

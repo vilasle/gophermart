@@ -4,9 +4,22 @@ import "time"
 
 type CalculationType = int
 
+func DefineCalculationType(t int) (value CalculationType, correct bool) {
+	switch t {
+	case CalculationTypePercent:
+		value, correct = CalculationTypePercent, true
+	case CalculationTypeFixed:
+		value, correct = CalculationTypeFixed, true
+	default:
+		value, correct = 0, false
+	}
+	return
+}
+
 const (
-	CalculationTypePercent CalculationType = iota + 1
-	CalculationTypeSpecificValue
+	CalculationTypeUnknown CalculationType = iota
+	CalculationTypePercent
+	CalculationTypeFixed
 )
 
 type RegisterRequest struct {
@@ -19,11 +32,16 @@ type AuthorizeRequest struct {
 	Password string
 }
 
+type UserID struct {
+	ID string
+}
+
 type UserInfo struct {
 	ID string
 }
 
 type RegisterOrderRequest struct {
+	UserID string
 	Number string
 }
 
@@ -32,6 +50,7 @@ type ListOrderRequest struct {
 }
 
 type OrderInfo struct {
+	UserID    string
 	Number    string
 	Status    string
 	Accrual   float64
@@ -43,8 +62,8 @@ type UserBalanceRequest struct {
 }
 
 type UserBalance struct {
-	Balance float64
-	Used    float64
+	Current   float64
+	Withdrawn float64
 }
 
 type WithdrawalRequest struct {
@@ -60,7 +79,7 @@ type WithdrawalListRequest struct {
 type WithdrawalInfo struct {
 	OrderNumber string
 	Sum         float64
-	Status      string
+	CreatedAt   time.Time
 }
 
 type AccrualsFilterRequest struct {
